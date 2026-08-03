@@ -1,0 +1,1458 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Stocklist — Supplier catalog & price requests</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#152a2f; --petrol:#0d5f6e; --petrol-deep:#0a4a56;
+  --paper:#f3f5f4; --card:#ffffff; --amber:#d9821e; --amber-deep:#b96a10;
+  --line:#d5ddda; --muted:#617277; --faint:#8a999c; --ok:#2f7d5b; --danger:#b23b3b;
+  --radius:10px; --shadow:0 1px 2px rgba(21,42,47,.06), 0 8px 24px rgba(21,42,47,.06);
+}
+*{box-sizing:border-box} html,body{margin:0;padding:0}
+body{font-family:"IBM Plex Sans",system-ui,sans-serif;color:var(--ink);background:var(--paper);-webkit-font-smoothing:antialiased;line-height:1.45}
+.mono{font-family:"IBM Plex Mono",monospace}
+button{font-family:inherit;cursor:pointer} input,select,textarea{font-family:inherit}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--petrol);outline-offset:1px;border-color:transparent}
+.hidden{display:none !important}
+
+/* header */
+header{position:sticky;top:0;z-index:40;background:var(--ink);color:#eef3f2;border-bottom:2px solid var(--petrol)}
+.bar{max-width:1240px;margin:0 auto;padding:12px 20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.brand{display:flex;align-items:baseline;gap:12px;margin-right:auto}
+.wordmark{font-family:"Space Grotesk";font-weight:700;font-size:22px;letter-spacing:.14em;text-transform:uppercase}
+.wordmark span{color:var(--amber)}
+.tagline{font-size:12px;color:#9fb4b6}
+@media(max-width:680px){.tagline{display:none}}
+.modeswitch{display:flex;background:rgba(255,255,255,.08);border-radius:8px;padding:3px}
+.modeswitch button{border:0;background:transparent;color:#bcccce;padding:7px 14px;border-radius:6px;font-weight:600;font-size:13px}
+.modeswitch button.active{background:var(--paper);color:var(--ink)}
+.usermenu{display:flex;align-items:center;gap:10px}
+.userchip{display:flex;flex-direction:column;line-height:1.15;text-align:right}
+.userchip .co{font-weight:600;font-size:13px}
+.userchip .ro{font-family:"IBM Plex Mono";font-size:10px;color:var(--amber);text-transform:uppercase;letter-spacing:.08em}
+.logout{border:1px solid rgba(255,255,255,.25);background:transparent;color:#dfeae9;font-size:12px;padding:7px 12px;border-radius:7px}
+.logout:hover{background:rgba(255,255,255,.1)}
+.guestpill{font-family:"IBM Plex Mono";font-size:11px;background:rgba(255,255,255,.1);padding:5px 10px;border-radius:999px;color:#cdd}
+.docket-toggle{border:0;background:var(--amber);color:#241300;font-weight:600;padding:9px 14px;border-radius:8px;font-size:13px;display:none;align-items:center;gap:8px}
+.docket-toggle .count{background:#241300;color:var(--amber);border-radius:999px;min-width:20px;height:20px;padding:0 6px;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700}
+@media(max-width:960px){.docket-toggle{display:inline-flex}}
+
+/* ---- auth ---- */
+.auth-wrap{min-height:calc(100vh - 55px);display:flex;align-items:flex-start;justify-content:center;padding:44px 18px}
+.auth-card{background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);width:100%;max-width:460px;overflow:hidden}
+.auth-head{background:var(--ink);color:#eef3f2;padding:22px 24px}
+.auth-head .wm{font-family:"Space Grotesk";font-weight:700;font-size:20px;letter-spacing:.14em;text-transform:uppercase}
+.auth-head .wm span{color:var(--amber)}
+.auth-head p{margin:6px 0 0;font-size:13px;color:#9fb4b6}
+.auth-body{padding:22px 24px 26px}
+.seg{display:flex;background:var(--paper);border:1px solid var(--line);border-radius:9px;padding:3px;margin-bottom:20px}
+.seg button{flex:1;border:0;background:transparent;padding:9px;border-radius:6px;font-weight:600;font-size:13.5px;color:var(--muted)}
+.seg button.active{background:var(--card);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.06)}
+.f{display:grid;gap:5px;margin-bottom:13px}
+.f label{font-size:11.5px;font-weight:600;color:var(--muted);letter-spacing:.02em;text-transform:uppercase}
+.f input{border:1px solid var(--line);border-radius:8px;padding:11px 12px;font-size:14px;background:var(--paper)}
+.f .sub{font-size:11px;color:var(--faint)}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:440px){.row2{grid-template-columns:1fr}}
+.primary{border:0;background:var(--petrol);color:#fff;font-weight:600;font-size:14.5px;padding:12px;border-radius:9px;width:100%}
+.primary:hover{background:var(--petrol-deep)} .primary:disabled{background:#dde2e0;color:#9aa;cursor:not-allowed}
+.amberbtn{border:0;background:var(--amber);color:#241300;font-weight:700;font-size:14.5px;padding:12px;border-radius:9px;width:100%}
+.amberbtn:hover{background:var(--amber-deep);color:#fff} .amberbtn:disabled{background:#dde2e0;color:#9aa;cursor:not-allowed}
+.err{background:rgba(178,59,59,.08);border:1px solid rgba(178,59,59,.3);color:var(--danger);font-size:12.5px;padding:9px 11px;border-radius:8px;margin-bottom:13px}
+.divider{display:flex;align-items:center;gap:10px;margin:18px 0;color:var(--faint);font-size:11px;letter-spacing:.06em;text-transform:uppercase}
+.divider::before,.divider::after{content:"";height:1px;background:var(--line);flex:1}
+.demo-quick{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.demo-quick button{border:1px solid var(--line);background:var(--card);color:var(--ink);font-size:12.5px;font-weight:600;padding:10px;border-radius:8px}
+.demo-quick button:hover{border-color:var(--petrol);color:var(--petrol)}
+.linklike{background:none;border:0;color:var(--petrol);font-size:13px;text-decoration:underline;padding:8px 0;display:block;margin:12px auto 0}
+.rolechoice{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:18px}
+.rolechoice button{border:1.5px solid var(--line);background:var(--card);border-radius:10px;padding:14px 10px;text-align:left}
+.rolechoice button.active{border-color:var(--petrol);background:rgba(13,95,110,.05)}
+.rolechoice .rt{font-family:"Space Grotesk";font-weight:600;font-size:14.5px;display:block}
+.rolechoice .rd{font-size:11.5px;color:var(--muted);display:block;margin-top:2px}
+.demo-note{font-size:11.5px;color:var(--muted);background:var(--paper);border:1px dashed var(--line);border-radius:8px;padding:9px 11px;margin-top:14px}
+.demo-note b{color:var(--ink)}
+.reg-inline{display:flex;gap:8px}
+.reg-inline input{flex:1}
+.reg-inline button{border:1px solid var(--petrol);background:var(--card);color:var(--petrol);font-weight:600;font-size:13px;padding:0 16px;border-radius:8px;white-space:nowrap}
+.reg-inline button:hover{background:var(--petrol);color:#fff}
+.reg-inline button:disabled{opacity:.5;cursor:not-allowed}
+.reg-result{margin:8px 0 4px;font-size:12.5px;border-radius:8px;padding:10px 12px;display:none}
+.reg-result.show{display:block}
+.reg-result.ok{background:rgba(47,125,91,.1);border:1px solid rgba(47,125,91,.35);color:#245c44}
+.reg-result.err{background:rgba(178,59,59,.08);border:1px solid rgba(178,59,59,.3);color:var(--danger)}
+.reg-result.checking{background:var(--paper);border:1px solid var(--line);color:var(--muted)}
+.reg-result .rn{font-weight:600;font-family:"Space Grotesk";font-size:14.5px}
+.reg-result .rmeta{font-family:"IBM Plex Mono";font-size:11px;margin-top:3px}
+.reg-result .src{font-size:10.5px;color:var(--faint);margin-top:6px;display:flex;align-items:center;gap:5px}
+.spin{display:inline-block;width:12px;height:12px;border:2px solid var(--line);border-top-color:var(--petrol);border-radius:50%;animation:sp .7s linear infinite;vertical-align:-2px;margin-right:7px}
+@keyframes sp{to{transform:rotate(360deg)}}
+
+/* verify */
+.otp-sent{font-size:13px;color:var(--muted);margin-bottom:6px}
+.otp-sent b{color:var(--ink)}
+.demo-reveal{background:#fff7ec;border:1px dashed var(--amber);border-radius:9px;padding:11px 13px;margin:12px 0 18px;font-size:12.5px}
+.demo-reveal .lab{font-family:"IBM Plex Mono";font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--amber-deep);font-weight:600}
+.demo-reveal .codes{display:flex;gap:20px;margin-top:6px;font-family:"IBM Plex Mono";font-weight:600;font-size:16px;color:var(--ink)}
+.demo-reveal .codes small{display:block;font-size:10px;font-weight:400;color:var(--muted);letter-spacing:.04em}
+.otp-field{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.otp-field .ol{flex:1}
+.otp-field .ol label{font-size:11.5px;font-weight:600;color:var(--muted);text-transform:uppercase;display:block;margin-bottom:4px}
+.otp-field input{width:100%;border:1px solid var(--line);border-radius:8px;padding:11px;font-family:"IBM Plex Mono";font-size:17px;letter-spacing:.32em;text-align:center;background:var(--paper)}
+.vstate{font-size:20px;width:26px;text-align:center;flex:none}
+.vstate.ok{color:var(--ok)} .vstate.wait{color:var(--faint)}
+.resend{background:none;border:0;color:var(--petrol);font-size:12px;text-decoration:underline;cursor:pointer;padding:2px}
+
+/* ---- app layout (same as before) ---- */
+.wrap{max-width:1240px;margin:0 auto;padding:22px 20px 80px;display:grid;grid-template-columns:1fr 340px;gap:24px;align-items:start}
+@media(max-width:960px){.wrap{grid-template-columns:1fr}}
+.notice{font-size:12px;color:var(--muted);background:rgba(13,95,110,.06);border:1px solid rgba(13,95,110,.15);border-radius:8px;padding:10px 12px;margin-bottom:16px;display:flex;gap:8px;align-items:flex-start}
+.notice b{color:var(--petrol)}
+.notice.guest{background:rgba(217,130,30,.08);border-color:rgba(217,130,30,.3)}
+.notice.guest b{color:var(--amber-deep)}
+.toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:18px}
+.search{flex:1;min-width:200px;position:relative}
+.search input{width:100%;padding:11px 12px 11px 38px;border:1px solid var(--line);border-radius:8px;background:var(--card);font-size:14px}
+.search svg{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--faint)}
+select.filter{padding:11px 12px;border:1px solid var(--line);border-radius:8px;background:var(--card);font-size:14px;color:var(--ink)}
+.count-label{margin-left:auto;font-size:12px;color:var(--muted)} .count-label b{color:var(--ink)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;display:flex;flex-direction:column;box-shadow:var(--shadow);transition:transform .12s,box-shadow .12s}
+.card:hover{transform:translateY(-2px);box-shadow:0 2px 4px rgba(21,42,47,.08),0 14px 32px rgba(21,42,47,.10)}
+.thumb{aspect-ratio:16/10;background:var(--petrol-deep);position:relative;overflow:hidden}
+.thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.thumb .glyph{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:"Space Grotesk";font-weight:700;font-size:44px;color:rgba(255,255,255,.85);background:radial-gradient(120% 120% at 20% 0%,rgba(255,255,255,.10),transparent 55%),var(--petrol)}
+.card-body{padding:13px 14px 14px;display:flex;flex-direction:column;gap:7px;flex:1}
+.eyebrow{font-family:"IBM Plex Mono";font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--petrol);font-weight:600}
+.eyebrow .sep{color:var(--faint);margin:0 5px}
+.item-name{font-family:"Space Grotesk";font-weight:600;font-size:16.5px;line-height:1.2}
+.desc{font-size:12.5px;color:var(--muted);flex:1}
+.datarow{display:flex;gap:14px;font-family:"IBM Plex Mono";font-size:11px;color:var(--muted);margin-top:2px} .datarow b{color:var(--ink)}
+.cardfoot{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:6px}
+.por{font-family:"IBM Plex Mono";font-size:11px;color:var(--petrol);background:rgba(13,95,110,.08);border:1px dashed rgba(13,95,110,.35);padding:5px 9px;border-radius:6px;white-space:nowrap}
+.addbtn{border:1px solid var(--amber);background:var(--amber);color:#241300;font-weight:600;font-size:13px;padding:7px 12px;border-radius:7px;white-space:nowrap}
+.addbtn:hover{background:var(--amber-deep);border-color:var(--amber-deep);color:#fff}
+.addbtn.in{background:transparent;color:var(--ok);border-color:var(--ok)}
+.quotes{font-family:"IBM Plex Mono";font-size:11px;font-weight:500;color:var(--amber-deep);padding:0 14px 12px;margin-top:-4px}
+
+/* docket */
+.docket{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);position:sticky;top:88px;overflow:hidden}
+.docket h2{margin:0;padding:15px 16px;font-family:"Space Grotesk";font-size:15px;background:var(--ink);color:#eef3f2;display:flex;align-items:center;justify-content:space-between}
+.docket h2 .num{font-family:"IBM Plex Mono";font-size:11px;color:var(--amber)}
+.docket-scroll{max-height:min(40vh,360px);overflow:auto}
+.dline{display:flex;gap:10px;padding:11px 14px;border-bottom:1px solid var(--line);align-items:flex-start}
+.dline .dinfo{flex:1;min-width:0}
+.dline .dname{font-size:13.5px;font-weight:600;line-height:1.25}
+.dline .dsup{font-family:"IBM Plex Mono";font-size:10.5px;color:var(--muted);text-transform:uppercase}
+.qty{display:flex;align-items:center;border:1px solid var(--line);border-radius:6px;overflow:hidden;height:28px}
+.qty button{border:0;background:var(--paper);width:26px;height:100%;font-size:15px;color:var(--ink)}
+.qty button:hover{background:#e6ebe9}
+.qty input{width:38px;border:0;text-align:center;font-family:"IBM Plex Mono";font-size:13px;height:100%}
+.qty input::-webkit-outer-spin-button,.qty input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.drop{border:0;background:none;color:var(--faint);font-size:16px;padding:2px 4px;align-self:center} .drop:hover{color:var(--danger)}
+.empty-docket{padding:24px 18px;text-align:center;color:var(--muted);font-size:13px}
+.empty-docket .big{font-family:"Space Grotesk";font-size:15px;color:var(--ink);margin-bottom:4px}
+.docket-id{padding:14px 16px 4px;border-top:2px solid var(--petrol)}
+.idcard{background:var(--paper);border:1px solid var(--line);border-radius:9px;padding:11px 12px;font-size:13px}
+.idcard .who{font-weight:600;display:flex;align-items:center;gap:6px}
+.idcard .vbadge{font-family:"IBM Plex Mono";font-size:9.5px;background:rgba(47,125,91,.14);color:var(--ok);padding:2px 6px;border-radius:999px;letter-spacing:.05em;font-weight:600}
+.idcard .meta{font-family:"IBM Plex Mono";font-size:11px;color:var(--muted);margin-top:3px}
+.docket-form{padding:8px 16px 16px;display:grid;gap:9px}
+.docket-form.hidden{display:none}
+.field{display:grid;gap:4px}
+.field label{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase}
+.field textarea{border:1px solid var(--line);border-radius:7px;padding:9px 10px;font-size:13.5px;background:var(--paper);resize:vertical;min-height:52px}
+.send{margin-top:2px;border:0;background:var(--amber);color:#241300;font-weight:700;font-size:14px;padding:12px;border-radius:8px}
+.send:hover{background:var(--amber-deep);color:#fff} .send:disabled{background:#e2e2e0;color:#9a9a98;cursor:not-allowed}
+
+/* supplier portal */
+.portal{display:grid;grid-template-columns:360px 1fr;gap:24px;align-items:start;grid-column:1/-1}
+@media(max-width:860px){.portal{grid-template-columns:1fr}}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}
+.panel > h3{margin:0;padding:14px 16px;font-family:"Space Grotesk";font-size:15px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px}
+.panel .pad{padding:16px}
+.formgrid{display:grid;gap:11px}
+.formgrid .field input,.formgrid .field textarea{border:1px solid var(--line);border-radius:8px;padding:10px;font-size:13.5px;background:var(--paper)}
+.formgrid .field textarea{resize:vertical;min-height:52px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:11px}
+.hint{font-size:12px;color:var(--muted);margin:-2px 0 4px}
+.as-co{font-family:"IBM Plex Mono";font-size:12px;background:var(--paper);border:1px solid var(--line);border-radius:7px;padding:8px 10px;color:var(--muted)}
+.as-co b{color:var(--ink)}
+.pill{font-family:"IBM Plex Mono";font-size:10px;background:rgba(217,130,30,.14);color:var(--amber-deep);padding:2px 7px;border-radius:999px;letter-spacing:.04em;font-weight:600}
+.ghost{border:1px solid var(--line);background:var(--card);color:var(--muted);font-size:12px;padding:6px 10px;border-radius:6px} .ghost:hover{border-color:var(--muted);color:var(--ink)}
+.sup-item{display:flex;gap:12px;padding:12px 16px;border-bottom:1px solid var(--line);align-items:center}
+.sup-item .mini{width:44px;height:44px;border-radius:7px;object-fit:cover;background:var(--petrol);flex:none;display:flex;align-items:center;justify-content:center;color:#fff;font-family:"Space Grotesk";font-weight:700}
+.sup-item .si-info{flex:1;min-width:0}
+.sup-item .si-name{font-weight:600;font-size:14px}
+.sup-item .si-meta{font-family:"IBM Plex Mono";font-size:11px;color:var(--muted)}
+.iconbtn{border:1px solid var(--line);background:var(--card);border-radius:6px;padding:5px 8px;font-size:12px;color:var(--muted)} .iconbtn:hover{color:var(--danger);border-color:var(--danger)}
+.req-card{padding:14px 16px;border-bottom:1px solid var(--line)}
+.req-head{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap}
+.req-no{font-family:"IBM Plex Mono";font-weight:600;color:var(--petrol);font-size:13px}
+.req-when{font-size:11px;color:var(--faint)}
+.req-who{font-size:13px;margin:4px 0 8px}
+.req-who .vchk{color:var(--ok);font-weight:600}
+.recips{display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin:2px 0 10px}
+.recips .rlab{font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--faint);font-weight:600}
+.chip{font-family:"IBM Plex Mono";font-size:11px;background:var(--paper);border:1px solid var(--line);color:var(--muted);padding:2px 8px;border-radius:999px}
+.chip.me{background:rgba(217,130,30,.14);border-color:var(--amber);color:var(--amber-deep);font-weight:600}
+.rl-block{padding:2px 0} .rl-block.faded{opacity:.4}
+.rl{display:flex;justify-content:space-between;font-family:"IBM Plex Mono";font-size:12px;gap:12px} .rl .q{color:var(--petrol);font-weight:600}
+.rl-match{font-family:"IBM Plex Mono";font-size:11px;color:var(--ok);padding:1px 0 3px 12px;border-left:2px solid var(--ok);margin:2px 0 4px}
+.rl-match.none{color:var(--faint);border-left-color:var(--line)}
+.req-note{font-size:12px;color:var(--muted);margin-top:8px;font-style:italic;border-left:2px solid var(--line);padding-left:8px}
+.section-empty{padding:34px 20px;text-align:center;color:var(--muted);font-size:13.5px}
+.section-empty .big{font-family:"Space Grotesk";font-size:16px;color:var(--ink);margin-bottom:6px}
+
+/* toast / scrim */
+.toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(20px);background:var(--ink);color:#fff;padding:13px 20px;border-radius:10px;box-shadow:var(--shadow);font-size:14px;z-index:100;opacity:0;pointer-events:none;transition:.25s;display:flex;align-items:center;gap:10px}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.toast .chk{color:var(--amber);font-size:18px} .toast .rq{font-family:"IBM Plex Mono";color:var(--amber);font-weight:600}
+.scrim{position:fixed;inset:0;background:rgba(21,42,47,.5);z-index:60;display:none} .scrim.show{display:block}
+@media(max-width:960px){
+  .docket-col{position:fixed;right:0;top:0;bottom:0;width:min(380px,92vw);z-index:70;transform:translateX(105%);transition:transform .25s;overflow:auto;background:var(--paper);padding:14px}
+  .docket-col.open{transform:translateX(0)} .docket{position:static}
+}
+/* ad banner */
+.adslot{margin:0 0 16px;border-radius:var(--radius);overflow:hidden;border:1px solid var(--line)}
+.adbanner{display:flex;align-items:center;gap:14px;min-height:84px;padding:16px 18px;color:#fff;text-decoration:none;position:relative;background:var(--petrol)}
+.adbanner .adtag{position:absolute;top:8px;right:10px;font-family:"IBM Plex Mono";font-size:9px;letter-spacing:.1em;text-transform:uppercase;opacity:.7}
+.adbanner .adtitle{font-family:"Space Grotesk";font-weight:600;font-size:17px;line-height:1.2}
+.adbanner .adcta{margin-left:auto;font-size:12px;border:1px solid rgba(255,255,255,.5);padding:6px 12px;border-radius:7px;white-space:nowrap}
+.adbanner img{width:100%;height:100%;object-fit:cover;position:absolute;inset:0}
+.adbanner .adinner{position:relative;display:flex;align-items:center;gap:14px;width:100%}
+
+/* subscription panel */
+.subpanel{grid-column:1/-1;border-radius:var(--radius);border:1px solid var(--line);background:var(--card);box-shadow:var(--shadow);padding:14px 16px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.subpanel .sbadge{font-family:"IBM Plex Mono";font-size:11px;font-weight:600;padding:4px 10px;border-radius:999px}
+.subpanel .sbadge.active{background:rgba(47,125,91,.14);color:var(--ok)}
+.subpanel .sbadge.pending{background:rgba(217,130,30,.14);color:var(--amber-deep)}
+.subpanel .sbadge.none{background:rgba(178,59,59,.1);color:var(--danger)}
+.subpanel .sinfo{font-size:13.5px} .subpanel .sinfo b{font-weight:600}
+.subpanel .plan-buy{margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.subpanel .plan-buy .pname{font-size:13px;color:var(--muted)}
+.subpanel button.sub-btn{border:0;background:var(--amber);color:#241300;font-weight:700;font-size:13px;padding:9px 16px;border-radius:8px}
+.subpanel button.sub-btn:hover{background:var(--amber-deep);color:#fff}
+
+/* admin */
+.adminwrap{grid-column:1/-1;display:grid;gap:20px}
+.admtabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:4px}
+.admtabs button{border:1px solid var(--line);background:var(--card);color:var(--muted);font-weight:600;font-size:13px;padding:8px 14px;border-radius:8px}
+.admtabs button.active{background:var(--ink);color:#fff;border-color:var(--ink)}
+.admsec{display:none} .admsec.on{display:block}
+.arow{display:flex;gap:12px;align-items:center;padding:11px 14px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.arow .agrow{flex:1;min-width:160px}
+.arow .aname{font-weight:600;font-size:14px}
+.arow .ameta{font-family:"IBM Plex Mono";font-size:11px;color:var(--muted)}
+.arow .actions{display:flex;gap:6px;flex-wrap:wrap}
+.tag{font-family:"IBM Plex Mono";font-size:10px;padding:2px 8px;border-radius:999px;font-weight:600}
+.tag.active{background:rgba(47,125,91,.14);color:var(--ok)} .tag.pending{background:rgba(217,130,30,.14);color:var(--amber-deep)}
+.tag.review,.tag.suspended,.tag.rejected,.tag.expired{background:rgba(178,59,59,.1);color:var(--danger)}
+.btn-xs{border:1px solid var(--line);background:var(--card);color:var(--ink);font-size:12px;padding:6px 10px;border-radius:6px;font-weight:600}
+.btn-xs:hover{border-color:var(--petrol);color:var(--petrol)}
+.btn-xs.ok{border-color:var(--ok);color:var(--ok)} .btn-xs.bad{border-color:var(--danger);color:var(--danger)}
+.admform{display:flex;gap:8px;flex-wrap:wrap;padding:12px 14px;border-top:1px solid var(--line);align-items:end}
+.admform .f2{display:grid;gap:3px} .admform label{font-size:10px;text-transform:uppercase;color:var(--muted);font-weight:600}
+.admform input{border:1px solid var(--line);border-radius:6px;padding:7px 9px;font-size:13px;background:var(--paper)}
+
+/* bulk upload + requirement matching */
+.bulkta{width:100%;min-height:120px;font-family:"IBM Plex Mono";font-size:12.5px;line-height:1.5;border:1px solid var(--line);border-radius:10px;padding:11px 12px;background:var(--paper);resize:vertical}
+.bulkrow{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px}
+.bulkrow input[type=file]{font-size:12px}
+.bulkprev,.matchres{margin-top:12px}
+.btbl{width:100%;border-collapse:collapse;font-size:12.5px}
+.btbl th{text-align:left;color:var(--muted);font-weight:600;font-size:10px;text-transform:uppercase;letter-spacing:.05em;padding:6px 8px;border-bottom:1px solid var(--line)}
+.btbl td{padding:6px 8px;border-bottom:1px solid var(--line)}
+.bmsg{font-size:12.5px;color:var(--muted);padding:8px 2px}
+.msum{font-size:13px;color:var(--muted)} .msum b{color:var(--ok);font-weight:700}
+.reqbtn{white-space:nowrap}
+.modal-overlay{position:fixed;inset:0;background:rgba(21,42,47,.5);backdrop-filter:blur(3px);z-index:200;display:none;align-items:center;justify-content:center;padding:20px}
+.modal-overlay.show{display:flex}
+.modal{background:var(--card);border-radius:16px;box-shadow:0 30px 80px rgba(0,0,0,.3);width:min(720px,100%);max-height:90vh;display:flex;flex-direction:column;overflow:hidden}
+.modal-head{display:flex;align-items:center;gap:12px;padding:18px 20px;border-bottom:1px solid var(--line)}
+.modal-head h2{font-family:"Space Grotesk";font-size:19px;margin:0}
+.mclose{margin-left:auto;border:0;background:transparent;font-size:22px;line-height:1;color:var(--muted);cursor:pointer}
+.modal-body{padding:18px 20px;overflow:auto}
+.modal-foot{display:flex;gap:10px;align-items:center;justify-content:flex-end;padding:14px 20px;border-top:1px solid var(--line)}
+.mrow{border:1px solid var(--line);border-radius:11px;padding:12px 14px;margin-bottom:10px}
+.mrow.nomatch{border-style:dashed;opacity:.85}
+.mreq{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.rqname{font-weight:600;font-size:14px} .rqqty{font-family:"IBM Plex Mono";font-size:12px;color:var(--amber-deep)}
+.mcount{margin-left:auto;font-size:11px;color:var(--ok);font-weight:600}
+.mnone{font-size:12.5px;color:var(--danger)}
+.mopts{display:grid;gap:6px}
+.mopt{display:flex;align-items:center;gap:9px;font-size:13px;padding:6px 8px;border-radius:8px;cursor:pointer}
+.mopt:hover{background:var(--paper)}
+.mopt .mname{font-weight:500} .mopt .mname.muted{color:var(--muted);font-weight:400}
+.mopt .msup{margin-left:auto;font-size:11px;color:var(--muted);font-family:"IBM Plex Mono"}
+.mopt.skip{border-top:1px dashed var(--line);margin-top:2px;padding-top:9px}
+
+@media(prefers-reduced-motion:reduce){*{transition:none !important}}
+</style>
+</head>
+<body>
+
+<header id="appHeader" class="hidden">
+  <div class="bar">
+    <div class="brand"><div class="wordmark">Stock<span>list</span></div><div class="tagline">Supplier catalog &middot; request pricing</div></div>
+    <div class="modeswitch" id="modeswitch">
+      <button id="mBrowse" class="active" onclick="setMode('browse')">Browse &amp; request</button>
+      <button id="mSupplier" onclick="setMode('supplier')">Supplier portal</button>
+      <button id="mAdmin" class="hidden" onclick="setMode('admin')">Admin</button>
+    </div>
+    <button class="docket-toggle" onclick="openDocket()">Request <span class="count" id="hCount">0</span></button>
+    <div class="usermenu" id="usermenu"></div>
+  </div>
+</header>
+
+<!-- ============ AUTH ============ -->
+<div id="authView">
+  <div class="auth-wrap">
+    <div class="auth-card">
+      <div class="auth-head">
+        <div class="wm">Stock<span>list</span></div>
+        <p>Verified supplier catalog &amp; price requests</p>
+      </div>
+      <div class="auth-body">
+        <div class="seg">
+          <button id="segSignin" class="active" onclick="authTab('signin')">Sign in</button>
+          <button id="segRegister" onclick="authTab('register')">Register</button>
+        </div>
+
+        <!-- sign in -->
+        <div id="paneSignin">
+          <div id="signinErr" class="err hidden"></div>
+          <div class="f"><label>Official email</label><input id="liEmail" type="email" placeholder="you@company.mv"></div>
+          <div class="f"><label>Password</label><input id="liPass" type="password" placeholder="••••••••"></div>
+          <button class="primary" onclick="doLogin()">Sign in</button>
+          <div class="divider">or try the demo</div>
+          <div class="demo-quick">
+            <button onclick="demoLogin('buyer')">Enter as demo buyer</button>
+            <button onclick="demoLogin('supplier')">Enter as demo supplier</button>
+          </div>
+          <button class="linklike" onclick="demoAdmin()" style="margin:8px auto 0">Enter as demo admin →</button>
+          <button class="linklike" onclick="guestEnter()">Browse catalog as guest →</button>
+          <div class="demo-note">Demo accounts use the password <b>demo1234</b>. Nothing here is sent to real inboxes — verification codes are shown on screen so you can complete the flow.</div>
+        </div>
+
+        <!-- register -->
+        <div id="paneRegister" class="hidden">
+          <div id="regErr" class="err hidden"></div>
+          <div class="rolechoice">
+            <button id="roleBuyer" class="active" onclick="pickRole('buyer')"><span class="rt">Buyer</span><span class="rd">Browse stock &amp; request prices</span></button>
+            <button id="roleSupplier" onclick="pickRole('supplier')"><span class="rt">Supplier</span><span class="rd">List stock &amp; receive requests</span></button>
+          </div>
+          <div class="f"><label>Business registration no.</label>
+            <div class="reg-inline"><input id="rgReg" placeholder="e.g. C28152026" oninput="onRegInput()"><button id="rgCheckBtn" onclick="checkRegistry()">Verify</button></div>
+            <span class="sub">Verified automatically against the Maldives Business Registry. Your official company name is taken from the record.</span>
+          </div>
+          <div class="reg-result" id="regResult"></div>
+          <div class="f"><label>Contact person</label><input id="rgName" placeholder="Full name"></div>
+          <div class="f"><label>Official email</label><input id="rgEmail" type="email" placeholder="name@company.mv"></div>
+          <div class="f"><label>Mobile number</label><input id="rgPhone" placeholder="+960 7XX XXXX"></div>
+          <div class="f"><label>Password</label><input id="rgPass" type="password" placeholder="At least 8 characters"></div>
+          <button class="primary" id="regSubmit" onclick="doRegister()" disabled>Create account &amp; verify contact</button>
+          <div class="demo-note">Demo registry — a fixed sample list, not the live database. Try <b>SP09012021</b> (ROSOLITE) or <b>C28152026</b> (MALIKU AGRO Pvt Ltd). A dissolved example (<b>C11112018</b>) is rejected. Verifying <i>any</i> real company needs the live server-side lookup (see notes).</div>
+        </div>
+
+        <!-- verify -->
+        <div id="paneVerify" class="hidden">
+          <div id="verErr" class="err hidden"></div>
+          <div class="otp-sent">We sent a 6-digit code to <b id="verEmail"></b> and by SMS to <b id="verPhone"></b>. Enter both to activate your account.</div>
+          <div class="demo-reveal">
+            <span class="lab">Demo delivery — shown here instead of your inbox / phone</span>
+            <div class="codes">
+              <span>Email code: <span id="revEmail">------</span><small>normally emailed</small></span>
+              <span>SMS code: <span id="revPhone">------</span><small>normally texted</small></span>
+            </div>
+          </div>
+          <div class="otp-field"><div class="ol"><label>Email code</label><input id="veEmail" inputmode="numeric" maxlength="6" placeholder="––––––"></div><div class="vstate wait" id="vsEmail">○</div></div>
+          <div class="otp-field"><div class="ol"><label>SMS code</label><input id="vePhone" inputmode="numeric" maxlength="6" placeholder="––––––"></div><div class="vstate wait" id="vsPhone">○</div></div>
+          <button class="amberbtn" onclick="doVerify()">Verify &amp; activate</button>
+          <div style="text-align:center;margin-top:12px"><button class="resend" onclick="resendCodes()">Resend codes</button> &nbsp;·&nbsp; <button class="resend" onclick="authTab('register')">Edit details</button></div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ BROWSE ============ -->
+<div class="wrap hidden" id="browseView">
+  <div>
+    <div class="notice" id="browseNotice"></div>
+    <div class="adslot hidden" id="adSlot"></div>
+    <div class="toolbar">
+      <div class="search">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+        <input id="search" type="text" placeholder="Search items, codes, descriptions…" oninput="renderCatalog()">
+      </div>
+      <select class="filter" id="fCat" onchange="renderCatalog()"><option value="">All categories</option></select>
+      <select class="filter" id="fSup" onchange="renderCatalog()"><option value="">All suppliers</option></select>
+      <button class="ghost reqbtn" onclick="openReqMatch()">⇪ Upload requirement list</button>
+      <div class="count-label"><b id="shownCount">0</b> items</div>
+    </div>
+    <div class="grid" id="catalog"></div>
+  </div>
+  <div class="docket-col" id="docketCol">
+    <div class="docket">
+      <h2>Your request <span class="num" id="docketNum"></span></h2>
+      <div class="docket-scroll" id="docketLines"></div>
+      <div class="docket-id hidden" id="docketId"></div>
+      <div class="docket-form hidden" id="docketForm">
+        <div class="field"><label>Notes (optional)</label><textarea id="bNote" placeholder="Delivery location, deadline, specs…"></textarea></div>
+        <button class="send" id="sendBtn" onclick="submitRequest()">Send price request</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ SUPPLIER ============ -->
+<div class="wrap hidden" id="supplierView">
+  <div class="portal">
+    <div class="subpanel" id="subPanel"></div>
+    <div class="panel">
+      <h3>Add stock item <span class="pill">no price</span></h3>
+      <div class="pad">
+        <p class="hint">List what you carry. Buyers request pricing separately — you never publish a rate here.</p>
+        <div class="as-co" id="asCo" style="margin-bottom:12px"></div>
+        <div class="formgrid">
+          <div class="field"><label>Item name</label><input id="iName" placeholder="e.g. Cordless impact driver"></div>
+          <div class="two">
+            <div class="field"><label>Category</label><input id="iCat" placeholder="e.g. Hand tools" list="catList"><datalist id="catList"></datalist></div>
+            <div class="field"><label>Unit</label><input id="iUnit" placeholder="e.g. pcs, box, m"></div>
+          </div>
+          <div class="two">
+            <div class="field"><label>Item code / SKU</label><input id="iCode" placeholder="optional"></div>
+            <div class="field"><label>In stock (qty)</label><input id="iStock" type="number" min="0" placeholder="optional"></div>
+          </div>
+          <div class="field"><label>Description</label><textarea id="iDesc" placeholder="Specs, brand, size…"></textarea></div>
+          <div class="field"><label>Image URL</label><input id="iImg" placeholder="optional — https://…"></div>
+          <button class="primary" onclick="addItem()">Add to catalog</button>
+        </div>
+      </div>
+    </div>
+    <div class="panel">
+      <h3>Bulk add items <span class="pill">CSV / list</span></h3>
+      <div class="pad">
+        <p class="hint">Paste rows or upload a .csv — one item per line, columns: <b>name, category, unit, code, stock</b>. A header row is optional.</p>
+        <textarea id="bulkText" class="bulkta" placeholder="Cordless impact driver, Power Tools, pcs, IMP-18V, 12
+PVC pipe 1 inch, Plumbing, length, PVC-1, 40
+Safety helmet, Safety, pcs, , 60"></textarea>
+        <div class="bulkrow">
+          <input type="file" id="bulkFile" accept=".csv,.tsv,.txt" onchange="loadFileTo('bulkFile','bulkText',previewBulk)">
+          <button class="ghost" onclick="previewBulk()">Preview</button>
+          <button class="primary" id="bulkAddBtn" onclick="addBulkItems()" disabled>Add all</button>
+        </div>
+        <div id="bulkPreview" class="bulkprev"></div>
+      </div>
+    </div>
+    <div style="display:grid;gap:24px">
+      <div class="panel">
+        <h3>Your catalog items <span style="margin-left:auto"><button class="ghost" onclick="resetDemo()">Reset demo data</button></span></h3>
+        <div id="supItems"></div>
+      </div>
+      <div class="panel">
+        <h3>Price requests inbox <span class="pill" id="reqCount">0</span></h3>
+        <div id="reqInbox"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ ADMIN ============ -->
+<div class="wrap hidden" id="adminView">
+  <div class="adminwrap">
+    <div class="admtabs">
+      <button class="active" data-sec="accounts" onclick="admTab('accounts')">Accounts</button>
+      <button data-sec="subs" onclick="admTab('subs')">Subscriptions</button>
+      <button data-sec="plans" onclick="admTab('plans')">Plans</button>
+      <button data-sec="ads" onclick="admTab('ads')">Ad banners</button>
+      <button data-sec="reqs" onclick="admTab('reqs')">Requests</button>
+    </div>
+    <div class="panel admsec on" id="secAccounts"><h3>Accounts &amp; approvals</h3><div id="admAccounts"></div></div>
+    <div class="panel admsec" id="secSubs"><h3>Subscriptions</h3><div id="admSubs"></div></div>
+    <div class="panel admsec" id="secPlans"><h3>Plans</h3><div id="admPlans"></div>
+      <div class="admform">
+        <div class="f2"><label>Name</label><input id="npName" placeholder="Plan name"></div>
+        <div class="f2"><label>Price MVR</label><input id="npPrice" type="number" style="width:100px"></div>
+        <div class="f2"><label>Days</label><input id="npDays" type="number" value="30" style="width:70px"></div>
+        <button class="btn-xs ok" onclick="admAddPlan()">Add plan</button>
+      </div>
+    </div>
+    <div class="panel admsec" id="secAds"><h3>Ad banners</h3><div id="admAds"></div>
+      <div class="admform">
+        <div class="f2"><label>Title</label><input id="naTitle" placeholder="Banner text"></div>
+        <div class="f2"><label>Link URL</label><input id="naLink" placeholder="https://…"></div>
+        <div class="f2"><label>Image URL</label><input id="naImg" placeholder="optional"></div>
+        <button class="btn-xs ok" onclick="admAddAd()">Add banner</button>
+      </div>
+    </div>
+    <div class="panel admsec" id="secReqs"><h3>All price requests</h3><div id="admReqs"></div></div>
+  </div>
+</div>
+
+<!-- ============ REQUIREMENT MATCH ============ -->
+<div class="modal-overlay" id="reqModal">
+  <div class="modal">
+    <div class="modal-head"><h2>Match your requirement list</h2><button class="mclose" onclick="closeReqMatch()">×</button></div>
+    <div class="modal-body">
+      <p class="hint">Paste the items you need (one per line) or upload a .csv. Optional columns: <b>name, qty, unit</b>. We tally each line against the live catalog and show which suppliers can quote it.</p>
+      <textarea id="reqText" class="bulkta" placeholder="Impact drill, 2
+PVC pipe 1 inch, 50, length
+Safety helmet, 10
+Widget 3000"></textarea>
+      <div class="bulkrow">
+        <input type="file" id="reqFile" accept=".csv,.tsv,.txt" onchange="loadFileTo('reqFile','reqText',runMatch)">
+        <button class="primary" onclick="runMatch()">Match against catalog</button>
+        <span id="matchSummary" class="msum"></span>
+      </div>
+      <div id="matchResults" class="matchres"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="ghost" onclick="closeReqMatch()">Close</button>
+      <button class="send" id="addMatchedBtn" onclick="addMatchedToDocket()" disabled>Add matched to request</button>
+    </div>
+  </div>
+</div>
+
+<div class="scrim" id="scrim" onclick="closeDocket()"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ---------- storage (shared for global data, personal for session) ---------- */
+const K_ACC="docket:accounts", K_CAT="docket:catalog", K_REQ="docket:requests", K_SESS="docket:session";
+const K_PLANS="docket:plans", K_SUBS="docket:subs", K_ADS="docket:ads";
+const hasStore = typeof window!=="undefined" && window.storage && typeof window.storage.get==="function";
+const mem={};
+async function sGet(key,shared){ if(!hasStore) return mem[key+shared]??null; try{const r=await window.storage.get(key,shared);return r?JSON.parse(r.value):null;}catch(e){return null;} }
+async function sSet(key,val,shared){ if(!hasStore){mem[key+shared]=val;return;} try{await window.storage.set(key,JSON.stringify(val),shared);}catch(e){console.error("save failed",e);} }
+
+/* ═══════════════ SUPABASE (real backend) ═══════════════
+   Fill these two in to run against your database. Leave blank to use the
+   in-browser demo store. Get both from Supabase ▸ Project Settings ▸ API. */
+const SUPA_URL  = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdpeHpmcmZwbWh2cnBwbHZlb2p2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUzMzQxNzMsImV4cCI6MjEwMDkxMDE3M30.DN1QlnsdVVtFmO-3Jw0HNkG-mB6b4O6pqVlK3goWrHw
+";                         // e.g. https://xxxx.supabase.co
+const SUPA_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdpeHpmcmZwbWh2cnBwbHZlb2p2Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4NTMzNDE3MywiZXhwIjoyMTAwOTEwMTczfQ.q7F7OxODgpDAs8iBkz4l4fdCBQR4pIB3jAZ2tm7i33I";                         // anon public key
+const LIVE = !!(SUPA_URL && SUPA_ANON && window.supabase);
+const sb = LIVE ? window.supabase.createClient(SUPA_URL, SUPA_ANON) : null;
+let myActiveSub = false;                       // current supplier's live sub state
+
+/* row → app-shape mappers */
+const mapItem=(r,active=true)=>({id:r.id,ownerId:r.owner_id,supplier:r.supplier_name,name:r.name,category:r.category,unit:r.unit,code:r.code,stock:r.stock,desc:r.description,img:r.image_url,_active:active});
+const mapPlan=r=>({id:r.id,name:r.name,price:r.price_mvr,days:r.period_days,active:r.active});
+const mapAd=r=>({id:r.id,title:r.title,img:r.image_url,link:r.link_url,placement:r.placement,weight:r.weight,active:r.active});
+const mapSub=r=>({id:r.id,supplierId:r.supplier_id,planId:r.plan_id,status:r.status,ref:r.payment_ref,startsAt:r.starts_at?Date.parse(r.starts_at):null,expiresAt:r.expires_at?Date.parse(r.expires_at):null,createdAt:Date.parse(r.created_at)});
+const mapProfile=r=>({id:r.id,role:r.role,company:r.company,regNo:r.reg_no,regType:r.reg_type,regUei:r.reg_uei,regVerified:r.reg_verified,contactName:r.contact_name,phone:r.phone,email:r.email,status:r.status,isAdmin:r.is_admin});
+const mapReq=r=>({id:r.id,no:r.req_no,at:Date.parse(r.created_at),buyerId:r.buyer_id,company:r.buyer_company,regNo:r.buyer_reg_no,name:r.contact_name,email:r.email,phone:r.phone,note:r.note,
+  lines:(r.request_lines||[]).map(l=>({name:l.item_name,supplier:l.supplier_name,category:l.category,unit:l.unit,code:l.code,qty:l.qty})),
+  recipients:(r.request_recipients||[]).map(x=>x.supplier_id)});
+
+/* load my own profile from a session */
+async function liveProfile(){
+  const { data:{ user } } = await sb.auth.getUser();
+  if(!user) return null;
+  const { data } = await sb.from("profiles").select("*").eq("id",user.id).maybeSingle();
+  return data ? mapProfile(data) : { id:user.id, email:user.email, role:"buyer", company:"", status:"pending" };
+}
+/* pull everything the current user is allowed to see into the globals */
+async function liveLoad(){
+  const [{data:plans},{data:ads},{data:pub}] = await Promise.all([
+    sb.from("plans").select("*").order("sort"),
+    sb.from("ads").select("*"),
+    sb.from("catalog_items").select("*")            // RLS: public sees only active-subscription items
+  ]);
+  PLANS=(plans||[]).map(mapPlan); ADS=(ads||[]).map(mapAd);
+  CATALOG=(pub||[]).map(r=>mapItem(r,true));
+  ACCOUNTS=currentUser?[currentUser]:[];
+  if(currentUser&&currentUser.role==="supplier"){
+    const { data:subs } = await sb.from("subscriptions").select("*").eq("supplier_id",currentUser.id);
+    SUBS=(subs||[]).map(mapSub);
+    myActiveSub=SUBS.some(s=>s.status==="active"&&Number(s.expiresAt)>Date.now());
+    const { data:mine } = await sb.from("catalog_items").select("*").eq("owner_id",currentUser.id);
+    const have=new Set(CATALOG.map(i=>i.id));
+    (mine||[]).forEach(r=>{ if(!have.has(r.id)) CATALOG.push(mapItem(r,myActiveSub)); });
+  } else { SUBS=[]; myActiveSub=false; }
+  if(currentUser) await liveLoadRequests();
+}
+async function liveLoadRequests(){
+  const { data } = await sb.from("requests").select("*, request_lines(*), request_recipients(supplier_id)").order("created_at",{ascending:false});
+  REQUESTS=(data||[]).map(mapReq);
+}
+async function liveLoadAdmin(){
+  const [{data:accts},{data:subs},{data:plans},{data:ads}] = await Promise.all([
+    sb.from("profiles").select("*").order("created_at",{ascending:false}),
+    sb.from("subscriptions").select("*").order("created_at",{ascending:false}),
+    sb.from("plans").select("*").order("sort"),
+    sb.from("ads").select("*")
+  ]);
+  ACCOUNTS=(accts||[]).map(mapProfile); SUBS=(subs||[]).map(mapSub);
+  PLANS=(plans||[]).map(mapPlan); ADS=(ads||[]).map(mapAd);
+  await liveLoadRequests();
+}
+/* map a fan-out recipient set to supplier profile ids (for request_recipients) */
+function recipientOwnerIds(req){
+  const ids=new Set();
+  (req.lines||[]).forEach(l=>CATALOG.filter(i=>i._active&&similar(l,i)).forEach(i=>{ if(i.ownerId) ids.add(i.ownerId); }));
+  return [...ids];
+}
+
+
+async function sha256(str){
+  if(window.crypto&&crypto.subtle){
+    const b=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(str));
+    return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,"0")).join("");
+  }
+  return "b64:"+btoa(unescape(encodeURIComponent(str)));
+}
+const uid=()=>Math.random().toString(36).slice(2,9);
+async function hashPw(pw,salt){ return sha256(salt+"::"+pw); }
+const esc=s=>(s??"").toString().replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+/* ---------- similarity / routing ---------- */
+const STOP=new Set(["the","and","for","with","pcs","set","pack","box","bag","kg","pc","500pc","assortment","standard"]);
+function nameWords(o){return (o.name||"").toLowerCase().replace(/[^a-z0-9]+/g," ").split(" ").filter(t=>t&&t.length>1&&!STOP.has(t));}
+function similar(a,b){
+  if(a.code&&b.code&&a.code.toLowerCase()===b.code.toLowerCase())return true;
+  const ca=(a.category||"").toLowerCase().trim(),cb=(b.category||"").toLowerCase().trim();
+  const wa=new Set(nameWords(a)),shared=nameWords(b).filter(t=>wa.has(t)).length;
+  if(ca&&ca===cb&&shared>=1)return true;
+  if(shared>=2)return true; return false;
+}
+const subActive=ownerId=> LIVE
+  ? (currentUser&&ownerId===currentUser.id ? myActiveSub : CATALOG.some(i=>i.ownerId===ownerId&&i._active))
+  : SUBS.some(s=>s.supplierId===ownerId&&s.status==="active"&&Number(s.expiresAt)>Date.now());
+const supActiveCo=co=>{const a=ACCOUNTS.find(x=>x.company===co&&x.role==="supplier");return a?subActive(a.id):(LIVE?CATALOG.some(i=>i.supplier===co&&i._active):false);};
+const activeItems=()=> LIVE ? CATALOG.filter(i=>i._active) : CATALOG.filter(i=>supActiveCo(i.supplier));
+const suppliersFor=line=>[...new Set(activeItems().filter(i=>similar(line,i)).map(i=>i.supplier))];
+const matchingItemsFor=(supplier,line)=>CATALOG.filter(i=>i.supplier===supplier&&similar(line,i));
+function recipientsFor(req){const s=new Set();(req.lines||[]).forEach(l=>suppliersFor(l).forEach(x=>s.add(x)));return [...s];}
+
+/* ---------- state ---------- */
+let ACCOUNTS=[], CATALOG=[], REQUESTS=[], DOCKET={}, currentUser=null, isGuest=false, mode="browse";
+let regRole="buyer", pendingId=null, registryResult=null;
+let PLANS=[], SUBS=[], ADS=[], adTimer=null;
+
+/* ---------- business-registry verification ----------
+   DEMO ONLY: resolves against a small sample list.
+   PRODUCTION: replace lookupRegistry() with a call to YOUR backend endpoint,
+   which server-side queries https://business.egov.mv/BusinessRegistry
+   (browsers can't call it directly — CORS + server-rendered HTML) and returns
+   { found, name, type, status }. See the notes in chat for Apps Script / FastAPI. */
+const REGISTRY={
+  "SP09012021":{name:"ROSOLITE",type:"Sole Proprietorship",status:"Registered",uei:"2021SP21474G"},
+  "C28152026":{name:"MALIKU AGRO Pvt Ltd",type:"Company",status:"Registered",uei:"2026PV02789B"},
+  "C08152019":{name:"Maldive Hardware Co. Pvt Ltd",type:"Company",status:"Registered"},
+  "C09992020":{name:"Reef Marine Supplies Pvt Ltd",type:"Company",status:"Registered"},
+  "SP12345":{name:"Green Six Abayas & Tailors",type:"Sole Proprietorship",status:"Registered"},
+  "C11112018":{name:"Dormant Trading Pvt Ltd",type:"Company",status:"Dissolved"}
+};
+const normReg=s=>(s||"").toUpperCase().replace(/\s+/g,"");
+function lookupRegistry(regNo){
+  if(LIVE){
+    return sb.functions.invoke("verify-registry",{ body:{ regNo } })
+      .then(({data,error})=>{ if(error||!data||!data.found) return {found:false};
+        return {found:true,regNo:data.regNo,name:data.name,type:data.type,status:data.status,uei:data.uei||""}; })
+      .catch(()=>({found:false}));
+  }
+  return new Promise(res=>setTimeout(()=>{
+    const q=normReg(regNo);
+    const key=REGISTRY[q]?q:Object.keys(REGISTRY).find(k=>normReg(REGISTRY[k].uei||"")===q);
+    if(key){ res({found:true,regNo:key,...REGISTRY[key]}); return; }
+    let suggest=null;
+    if(q.length>=4){ const hits=Object.keys(REGISTRY).filter(k=>k.startsWith(q)); if(hits.length===1) suggest=hits[0]; }
+    res({found:false,suggest});
+  }, 850));
+}
+
+/* ---------- seed ---------- */
+const SEED_SUP=["Maldive Hardware Co.","Reef Marine Supplies","Atoll Roadworks Ltd","CareMed Maldives","Island Electricals","Male' Tools & Fixings","Coral Power Solutions","Lagoon Civil Supplies"];
+const SEED_ITEMS=[
+  ["Maldive Hardware Co.","Cordless impact driver 18V","Hand tools","pcs","MHC-DR18",24,"Brushless, 2×2.0Ah batteries, charger and case included."],
+  ["Maldive Hardware Co.","Adjustable wrench set (5pc)","Hand tools","set","MHC-AW5",40,"Chrome-vanadium, 6\" to 12\", anti-slip handles."],
+  ["Reef Marine Supplies","Marine deep-cycle battery 100Ah","Batteries","pcs","RMS-B100",12,"12V sealed lead-acid, maintenance-free, 2-year warranty."],
+  ["Reef Marine Supplies","AGM battery 12V 7Ah","Batteries","pcs","RMS-B7",60,"Sealed AGM for UPS and alarm systems."],
+  ["Atoll Roadworks Ltd","Thermoplastic road marking paint — white","Road marking","25kg bag","ARL-TPW",30,"Hot-applied, high reflectivity with glass beads."],
+  ["Atoll Roadworks Ltd","Reflective glass beads","Road marking","25kg bag","ARL-GB",22,"Drop-on beads for thermoplastic and cold paint."],
+  ["CareMed Maldives","Folding wheelchair — standard","Mobility","pcs","CMM-WC1",8,"Steel frame, 100kg capacity, puncture-proof tyres."],
+  ["CareMed Maldives","Aluminium walking frame","Mobility","pcs","CMM-WF2",15,"Lightweight, height-adjustable, with rubber ferrules."],
+  ["Island Electricals","LED floodlight 100W","Electrical","pcs","IE-FL100",35,"IP66, 6500K, aluminium housing, 2-year warranty."],
+  ["Island Electricals","Cable tie assortment (500pc)","Electrical","pack","IE-CT500",80,"UV-resistant nylon, 100–300mm, black."],
+  ["Male' Tools & Fixings","Impact driver 18V brushless","Hand tools","pcs","MTF-ID18",18,"Brushless 18V driver, 2 batteries and carry case."],
+  ["Coral Power Solutions","Deep-cycle battery 100Ah 12V","Batteries","pcs","CPS-DC100",20,"Sealed deep-cycle for marine and solar."],
+  ["Coral Power Solutions","AGM battery 12V 7Ah","Batteries","pcs","CPS-AGM7",50,"Sealed AGM for UPS and security systems."],
+  ["Lagoon Civil Supplies","Thermoplastic road marking paint — yellow","Road marking","25kg bag","LCS-TPY",26,"Hot-applied, high durability, glass beads included."],
+  ["Lagoon Civil Supplies","Reflective glass beads","Road marking","25kg bag","LCS-GB",20,"Drop-on beads for road marking systems."]
+];
+function slugEmail(co){return co.toLowerCase().replace(/[^a-z0-9]+/g,"").slice(0,14)+"@demo.mv";}
+
+async function seedIfEmpty(){
+  const salt="demoSalt", pass=await hashPw("demo1234",salt);
+  // supplier accounts
+  const supAcc={};
+  SEED_SUP.forEach((co,i)=>{
+    const id="sup"+i;
+    supAcc[co]=id;
+    ACCOUNTS.push({id,role:"supplier",company:co,regNo:"C"+(8152000+i),regType:"Company",regVerified:true,contactName:"Sales Desk",email:slugEmail(co),phone:"+9607"+(700000+i),passHash:pass,salt,emailVerified:true,phoneVerified:true,status:"active",demo:true,createdAt:Date.now()});
+  });
+  // one demo buyer
+  ACCOUNTS.push({id:"buy0",role:"buyer",company:"Regional Airports Co. Ltd",regNo:"C04512011",regType:"Company",regVerified:true,contactName:"Ibrahim Nasir",email:"buyer@demo.mv",phone:"+9607770000",passHash:pass,salt,emailVerified:true,phoneVerified:true,status:"active",demo:true,createdAt:Date.now()});
+  // admin
+  ACCOUNTS.push({id:"admin0",role:"buyer",isAdmin:true,company:"Stocklist Admin",regNo:"—",regType:"",regVerified:true,contactName:"Administrator",email:"admin@demo.mv",phone:"+9600000000",passHash:pass,salt,emailVerified:true,phoneVerified:true,status:"active",demo:true,createdAt:Date.now()});
+  CATALOG=SEED_ITEMS.map(a=>({id:uid(),createdAt:Date.now(),ownerId:supAcc[a[0]],supplier:a[0],name:a[1],category:a[2],unit:a[3],code:a[4],stock:a[5],desc:a[6],img:""}));
+  // plans, active subscriptions for demo suppliers, ad banners
+  PLANS=[{id:"plan1",name:"Supplier Monthly",price:750,days:30,active:true}];
+  SUBS=SEED_SUP.map((co,i)=>({id:"sub"+i,supplierId:supAcc[co],planId:"plan1",status:"active",ref:"DEMO-SEED",startsAt:Date.now(),expiresAt:Date.now()+30*864e5,createdAt:Date.now()}));
+  ADS=[
+    {id:"ad1",title:"ROSOLITE — sourcing & supply for the Maldives",img:"",link:"",placement:"catalog_top",weight:2,active:true},
+    {id:"ad2",title:"List your stock on Docket — reach verified buyers",img:"",link:"",placement:"catalog_top",weight:1,active:true}
+  ];
+  await sSet(K_ACC,ACCOUNTS,true);
+  await sSet(K_CAT,CATALOG,true);
+  await sSet(K_PLANS,PLANS,true); await sSet(K_SUBS,SUBS,true); await sSet(K_ADS,ADS,true);
+}
+
+/* ---------- boot ---------- */
+async function boot(){
+  if(LIVE){
+    hideDemoUI();
+    try{
+      currentUser=await liveProfile();
+      if(currentUser && currentUser.status!=="suspended"){ await liveLoad(); enterApp(); }
+      else { currentUser=null; showAuth(); }
+    }catch(e){ console.error(e); showAuth(); }
+    return;
+  }
+  ACCOUNTS=await sGet(K_ACC,true)||[];
+  CATALOG=await sGet(K_CAT,true)||[];
+  REQUESTS=await sGet(K_REQ,true)||[];
+  PLANS=await sGet(K_PLANS,true)||[]; SUBS=await sGet(K_SUBS,true)||[]; ADS=await sGet(K_ADS,true)||[];
+  if(!ACCOUNTS.length||!CATALOG.length){ ACCOUNTS=[];CATALOG=[]; await seedIfEmpty(); }
+  if(!PLANS.length){ PLANS=[{id:"plan1",name:"Supplier Monthly",price:750,days:30,active:true}]; await sSet(K_PLANS,PLANS,true); }
+  if(!SUBS.length && CATALOG.length){          // migrate older data: keep existing suppliers visible
+    const ids=[...new Set(CATALOG.map(i=>i.ownerId).filter(Boolean))];
+    SUBS=ids.map((sid,i)=>({id:"submig"+i,supplierId:sid,planId:(PLANS[0]||{}).id||"plan1",status:"active",ref:"MIGRATED",startsAt:Date.now(),expiresAt:Date.now()+30*864e5,createdAt:Date.now()}));
+    await sSet(K_SUBS,SUBS,true);
+  }
+  if(!ADS.length){ ADS=[{id:"ad1",title:"ROSOLITE — sourcing & supply for the Maldives",img:"",link:"",placement:"catalog_top",weight:2,active:true},{id:"ad2",title:"List your stock on Docket — reach verified buyers",img:"",link:"",placement:"catalog_top",weight:1,active:true}]; await sSet(K_ADS,ADS,true); }
+  const sess=await sGet(K_SESS,false);
+  const u=sess&&ACCOUNTS.find(a=>a.id===sess.userId&&a.status==="active");
+  if(u){ currentUser=u; enterApp(); } else { showAuth(); }
+}
+
+/* ---------- auth UI ---------- */
+function showAuth(){
+  document.getElementById("appHeader").classList.add("hidden");
+  ["browseView","supplierView","adminView"].forEach(id=>document.getElementById(id).classList.add("hidden"));
+  document.getElementById("authView").classList.remove("hidden");
+  authTab("signin");
+}
+function authTab(t){
+  document.getElementById("segSignin").classList.toggle("active",t==="signin");
+  document.getElementById("segRegister").classList.toggle("active",t!=="signin");
+  document.getElementById("paneSignin").classList.toggle("hidden",t!=="signin");
+  document.getElementById("paneRegister").classList.toggle("hidden",t!=="register");
+  document.getElementById("paneVerify").classList.toggle("hidden",t!=="verify");
+  hideErr();
+}
+function pickRole(r){ regRole=r; document.getElementById("roleBuyer").classList.toggle("active",r==="buyer"); document.getElementById("roleSupplier").classList.toggle("active",r==="supplier"); }
+function hideErr(){ ["signinErr","regErr","verErr"].forEach(id=>document.getElementById(id).classList.add("hidden")); }
+function showErr(id,msg){ const e=document.getElementById(id); e.textContent=msg; e.classList.remove("hidden"); }
+
+const emailOk=v=>/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+const phoneDigits=v=>(v||"").replace(/\D/g,"");
+
+/* registry check */
+function onRegInput(){ registryResult=null; document.getElementById("regResult").classList.remove("show"); document.getElementById("regSubmit").disabled=true; }
+function useSuggest(v){ document.getElementById("rgReg").value=v; checkRegistry(); }
+async function checkRegistry(){
+  const regNo=val("rgReg"), box=document.getElementById("regResult"), btn=document.getElementById("rgCheckBtn"), submit=document.getElementById("regSubmit");
+  if(!regNo){ box.className="reg-result err show"; box.textContent="Enter a registration number to verify."; submit.disabled=true; return; }
+  btn.disabled=true; box.className="reg-result checking show"; box.innerHTML=`<span class="spin"></span>Checking the Maldives Business Registry…`;
+  const r=await lookupRegistry(regNo);
+  btn.disabled=false;
+  if(!r.found){ registryResult=null; submit.disabled=true; box.className="reg-result err show";
+    box.innerHTML=`Not found in the registry — the record must exist and be active.`+(r.suggest?` <button class="resend" style="color:var(--danger)" onclick="useSuggest('${r.suggest}')">Did you mean ${esc(r.suggest)}?</button>`:``); return; }
+  if(r.status!=="Registered"){ registryResult=null; submit.disabled=true; box.className="reg-result err show";
+    box.innerHTML=`Found <b>${esc(r.name)}</b>, but its status is <b>${esc(r.status)}</b> — not “Registered”. This business can't be onboarded.`; return; }
+  registryResult={regNo:r.regNo, name:r.name, type:r.type, status:r.status, uei:r.uei||""};
+  submit.disabled=false; box.className="reg-result ok show";
+  box.innerHTML=`<div class="rn">✓ ${esc(r.name)}</div><div class="rmeta">${esc(r.type)} · ${esc(r.status)} · ${esc(r.regNo)}${r.uei?` · UEI ${esc(r.uei)}`:""}</div><div class="src">Verified against Maldives Business Registry</div>`;
+}
+
+async function doRegister(){
+  hideErr();
+  if(!registryResult){ return showErr("regErr","Verify your business registration number first."); }
+  const contactName=val("rgName"), email=val("rgEmail").toLowerCase(), phone=val("rgPhone"), pass=document.getElementById("rgPass").value;
+  if(!contactName){ return showErr("regErr","Contact person is required."); }
+  if(!emailOk(email)){ return showErr("regErr","Enter a valid official email address."); }
+  if(phoneDigits(phone).length<7){ return showErr("regErr","Enter a valid mobile number."); }
+  if(pass.length<8){ return showErr("regErr","Password must be at least 8 characters."); }
+  if(LIVE){
+    const submit=document.getElementById("regSubmit"); submit.disabled=true;
+    const { data, error } = await sb.auth.signUp({ email, password:pass, options:{ data:{
+      role:regRole, company:registryResult.name, reg_no:registryResult.regNo, reg_type:registryResult.type,
+      reg_uei:registryResult.uei, reg_verified:true, contact_name:contactName, phone,
+      status: regRole==="buyer" ? "active" : "pending"
+    }}});
+    submit.disabled=false;
+    if(error){ return showErr("regErr", error.message); }
+    if(data.session){                         // email confirmation is OFF → straight in
+      currentUser=await liveProfile(); await liveLoad(); enterApp();
+      toast("Account created — welcome aboard.",false);
+    } else {                                   // confirmation ON → verify by email link
+      showErr("regErr",""); document.getElementById("regErr").classList.add("hidden");
+      authTab("signin");
+      toast("Check your email to confirm your account, then sign in.",false);
+    }
+    return;
+  }
+  ACCOUNTS=await sGet(K_ACC,true)||ACCOUNTS;
+  const existing=ACCOUNTS.find(a=>a.email===email);
+  if(existing&&existing.status==="active"){ return showErr("regErr","That email is already registered. Try signing in."); }
+  const salt=uid()+uid(), passHash=await hashPw(pass,salt);
+  const acc={ id:existing?existing.id:uid(), role:regRole,
+    company:registryResult.name, regNo:registryResult.regNo, regType:registryResult.type, regUei:registryResult.uei, regVerified:true,
+    contactName, email, phone, passHash, salt,
+    emailVerified:false, phoneVerified:false, status:"pending", createdAt:Date.now(),
+    emailCode:otp(), phoneCode:otp() };
+  ACCOUNTS=ACCOUNTS.filter(a=>a.id!==acc.id); ACCOUNTS.push(acc);
+  await sSet(K_ACC,ACCOUNTS,true);
+  pendingId=acc.id; openVerify(acc);
+}
+const otp=()=>String(Math.floor(100000+Math.random()*900000));
+function openVerify(acc){
+  document.getElementById("verEmail").textContent=acc.email;
+  document.getElementById("verPhone").textContent=acc.phone;
+  document.getElementById("revEmail").textContent=acc.emailCode;
+  document.getElementById("revPhone").textContent=acc.phoneCode;
+  document.getElementById("veEmail").value=""; document.getElementById("vePhone").value="";
+  setVState("vsEmail",false); setVState("vsPhone",false);
+  authTab("verify");
+}
+function setVState(id,ok){ const e=document.getElementById(id); e.textContent=ok?"✓":"○"; e.className="vstate "+(ok?"ok":"wait"); }
+async function resendCodes(){
+  ACCOUNTS=await sGet(K_ACC,true)||ACCOUNTS;
+  const acc=ACCOUNTS.find(a=>a.id===pendingId); if(!acc)return;
+  acc.emailCode=otp(); acc.phoneCode=otp(); await sSet(K_ACC,ACCOUNTS,true);
+  openVerify(acc); toast("New codes generated.",false);
+}
+async function doVerify(){
+  hideErr();
+  ACCOUNTS=await sGet(K_ACC,true)||ACCOUNTS;
+  const acc=ACCOUNTS.find(a=>a.id===pendingId); if(!acc){ return showErr("verErr","Session expired — please register again."); }
+  const ec=val("veEmail"), pc=val("vePhone");
+  const eOk=ec===acc.emailCode, pOk=pc===acc.phoneCode;
+  setVState("vsEmail",eOk); setVState("vsPhone",pOk);
+  if(!eOk||!pOk){ return showErr("verErr","One or both codes are incorrect. Check the codes shown above."); }
+  acc.emailVerified=true; acc.phoneVerified=true; acc.status="active"; delete acc.emailCode; delete acc.phoneCode;
+  await sSet(K_ACC,ACCOUNTS,true);
+  await startSession(acc);
+  toast("Account verified — welcome aboard.",false);
+}
+async function doLogin(){
+  hideErr();
+  const email=val("liEmail").toLowerCase(), pass=document.getElementById("liPass").value;
+  if(LIVE){
+    const { error } = await sb.auth.signInWithPassword({ email, password:pass });
+    if(error){ return showErr("signinErr", /confirm/i.test(error.message)?"Please confirm your email first (check your inbox).":error.message); }
+    currentUser=await liveProfile();
+    if(currentUser && currentUser.status==="suspended"){ await sb.auth.signOut(); currentUser=null; return showErr("signinErr","This account is suspended."); }
+    await liveLoad(); enterApp();
+    return;
+  }
+  ACCOUNTS=await sGet(K_ACC,true)||ACCOUNTS;
+  const acc=ACCOUNTS.find(a=>a.email===email);
+  if(!acc){ return showErr("signinErr","No account with that email."); }
+  if(acc.status==="pending"){ pendingId=acc.id; return openVerify(acc); }
+  const h=await hashPw(pass,acc.salt);
+  if(h!==acc.passHash){ return showErr("signinErr","Incorrect password."); }
+  await startSession(acc);
+}
+async function demoLogin(role){
+  ACCOUNTS=await sGet(K_ACC,true)||ACCOUNTS;
+  const acc=ACCOUNTS.find(a=>a.demo&&a.role===role) || (role==="supplier"?ACCOUNTS.find(a=>a.role==="supplier"):ACCOUNTS.find(a=>a.role==="buyer"));
+  if(acc) startSession(acc);
+}
+async function startSession(acc){
+  currentUser=acc; isGuest=false;
+  await sSet(K_SESS,{userId:acc.id},false);
+  enterApp();
+}
+async function logout(){
+  currentUser=null; isGuest=false; DOCKET={};
+  if(LIVE){ try{ await sb.auth.signOut(); }catch(e){} }
+  await sSet(K_SESS,null,false);
+  showAuth();
+  window.scrollTo({top:0});
+}
+function guestEnter(){ isGuest=true; currentUser=null; enterApp(); }
+const val=id=>document.getElementById(id).value.trim();
+
+/* ---------- enter app ---------- */
+function enterApp(){
+  document.getElementById("authView").classList.add("hidden");
+  document.getElementById("appHeader").classList.remove("hidden");
+  const isSup=currentUser&&currentUser.role==="supplier";
+  const isAdm=currentUser&&currentUser.isAdmin;
+  document.getElementById("mSupplier").classList.toggle("hidden",!isSup);
+  document.getElementById("mAdmin").classList.toggle("hidden",!isAdm);
+  renderUserMenu();
+  refreshFilters(); renderCatalog(); renderDocketPanel();
+  if(isSup){ renderAsCo(); renderSubPanel(); renderSupItems(); renderInbox(); }
+  setMode("browse");
+}
+function renderUserMenu(){
+  const m=document.getElementById("usermenu");
+  if(isGuest){ m.innerHTML=`<span class="guestpill">Guest · browse only</span><button class="logout" onclick="logout()">Sign in</button>`; return; }
+  const ro=currentUser.isAdmin?"admin":(currentUser.role+" · verified");
+  m.innerHTML=`<div class="userchip"><span class="co">${esc(currentUser.company)}</span><span class="ro">${esc(ro)}</span></div><button class="logout" onclick="logout()">Log out</button>`;
+}
+function setMode(m){
+  if(m==="supplier"&&!(currentUser&&currentUser.role==="supplier")) m="browse";
+  if(m==="admin"&&!(currentUser&&currentUser.isAdmin)) m="browse";
+  mode=m;
+  document.getElementById("browseView").classList.toggle("hidden",m!=="browse");
+  document.getElementById("supplierView").classList.toggle("hidden",m!=="supplier");
+  document.getElementById("adminView").classList.toggle("hidden",m!=="admin");
+  document.getElementById("mBrowse").classList.toggle("active",m==="browse");
+  document.getElementById("mSupplier").classList.toggle("active",m==="supplier");
+  document.getElementById("mAdmin").classList.toggle("active",m==="admin");
+  if(m==="browse"){ renderBrowseNotice(); renderAds(); }
+  if(m==="supplier"){ renderAsCo(); renderSubPanel(); renderSupItems(); renderInbox(); }
+  if(m==="admin"){ renderAdmin(); }
+  window.scrollTo({top:0});
+}
+function renderBrowseNotice(){
+  const n=document.getElementById("browseNotice");
+  if(isGuest){ n.className="notice guest"; n.innerHTML=`<span>🔒</span><span><b>You're browsing as a guest.</b> Sending a price request requires a verified company account — <button class="resend" onclick="logout()">sign in or register</button>.</span>`; }
+  else { n.className="notice"; n.innerHTML=`<span>ℹ️</span><span><b>How it works.</b> Pick the items you need and send one price request — it fans out to <b>every supplier who carries a similar item</b>. Your verified company details are attached automatically.</span>`; }
+}
+
+/* ---------- filters ---------- */
+function refreshFilters(){
+  const cats=[...new Set(CATALOG.map(i=>i.category).filter(Boolean))].sort();
+  const sups=[...new Set(CATALOG.map(i=>i.supplier).filter(Boolean))].sort();
+  fillSelect("fCat",cats,"All categories"); fillSelect("fSup",sups,"All suppliers");
+  document.getElementById("catList").innerHTML=cats.map(c=>`<option value="${esc(c)}">`).join("");
+}
+function fillSelect(id,values,allLabel){ const el=document.getElementById(id); if(!el)return; const cur=el.value;
+  el.innerHTML=`<option value="">${allLabel}</option>`+values.map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join("");
+  if(values.includes(cur))el.value=cur; }
+
+/* ---------- catalog ---------- */
+function renderCatalog(){
+  const q=val("search").toLowerCase(), fc=document.getElementById("fCat").value, fs=document.getElementById("fSup").value;
+  const list=activeItems().filter(i=>{
+    if(fc&&i.category!==fc)return false; if(fs&&i.supplier!==fs)return false;
+    if(q){ if(!`${i.name} ${i.supplier} ${i.category} ${i.code} ${i.desc}`.toLowerCase().includes(q))return false; }
+    return true;
+  });
+  document.getElementById("shownCount").textContent=list.length;
+  const box=document.getElementById("catalog");
+  box.innerHTML=list.length?list.map(cardHTML).join(""):`<div class="section-empty" style="grid-column:1/-1"><div class="big">No matching items</div>Try a different search or clear the filters.</div>`;
+}
+function cardHTML(i){
+  const inD=DOCKET[i.id]!=null, glyph=(i.category||i.name||"?").trim().charAt(0).toUpperCase(), supN=suppliersFor(i).length;
+  const thumb=i.img?`<div class="thumb"><img src="${esc(i.img)}" alt="" onerror="this.parentNode.innerHTML='<div class=\\'glyph\\'>${esc(glyph)}</div>'"></div>`:`<div class="thumb"><div class="glyph">${esc(glyph)}</div></div>`;
+  const btn = isGuest
+    ? `<button class="addbtn" onclick="guestBlock()">+ Add</button>`
+    : `<button class="addbtn ${inD?"in":""}" onclick="toggleDocket('${i.id}')">${inD?"✓ Added":"+ Add"}</button>`;
+  return `<div class="card">${thumb}<div class="card-body">
+    <div class="eyebrow">${esc(i.supplier||"—")}<span class="sep">/</span>${esc(i.category||"—")}</div>
+    <div class="item-name">${esc(i.name)}</div>
+    <div class="desc">${esc(i.desc||"")}</div>
+    <div class="datarow">${i.code?`<span>code&nbsp;<b>${esc(i.code)}</b></span>`:""}${i.unit?`<span>unit&nbsp;<b>${esc(i.unit)}</b></span>`:""}${(i.stock!==""&&i.stock!=null)?`<span>stock&nbsp;<b>${esc(i.stock)}</b></span>`:""}</div>
+    <div class="cardfoot"><span class="por">Price on request</span>${btn}</div></div>
+    ${supN>1?`<div class="quotes">↳ ${supN} suppliers can quote this</div>`:""}</div>`;
+}
+function guestBlock(){ toast("Sign in with a verified account to request prices.",true); }
+
+/* ---------- docket ---------- */
+function toggleDocket(id){ if(DOCKET[id]!=null)delete DOCKET[id]; else DOCKET[id]=1; renderCatalog(); renderDocketPanel(); }
+function setQty(id,v){ DOCKET[id]=Math.max(1,parseInt(v)||1); renderDocketPanel(); }
+function bumpQty(id,d){ setQty(id,(DOCKET[id]||1)+d); }
+function renderDocketPanel(){
+  const ids=Object.keys(DOCKET), n=ids.length;
+  document.getElementById("hCount").textContent=n;
+  document.getElementById("docketNum").textContent=n?`${n} item${n>1?"s":""}`:"";
+  const box=document.getElementById("docketLines"), idBox=document.getElementById("docketId"), form=document.getElementById("docketForm");
+  if(!n){ box.innerHTML=`<div class="empty-docket"><div class="big">Nothing added yet</div>Add items from the catalog, then send one price request.</div>`; idBox.classList.add("hidden"); form.classList.add("hidden"); return; }
+  box.innerHTML=ids.map(id=>{ const i=CATALOG.find(x=>x.id===id); if(!i)return"";
+    return `<div class="dline"><div class="dinfo"><div class="dname">${esc(i.name)}</div><div class="dsup">${esc(i.supplier||"—")}${i.unit?` · ${esc(i.unit)}`:""}</div></div>
+      <div class="qty"><button onclick="bumpQty('${id}',-1)">−</button><input type="number" min="1" value="${DOCKET[id]}" onchange="setQty('${id}',this.value)"><button onclick="bumpQty('${id}',1)">+</button></div>
+      <button class="drop" onclick="toggleDocket('${id}')">×</button></div>`; }).join("");
+  if(currentUser){
+    idBox.classList.remove("hidden");
+    idBox.innerHTML=`<div class="idcard"><div class="who">${esc(currentUser.company)} <span class="vbadge">✓ verified</span></div>
+      <div class="meta">${esc(currentUser.contactName)} · ${esc(currentUser.email)} · ${esc(currentUser.phone)}</div></div>`;
+  } else idBox.classList.add("hidden");
+  form.classList.remove("hidden");
+}
+function openDocket(){ document.getElementById("docketCol").classList.add("open"); document.getElementById("scrim").classList.add("show"); }
+function closeDocket(){ document.getElementById("docketCol").classList.remove("open"); document.getElementById("scrim").classList.remove("show"); }
+
+function reqNumber(){ const d=new Date(); const ymd=`${d.getFullYear()}${String(d.getMonth()+1).padStart(2,"0")}${String(d.getDate()).padStart(2,"0")}`;
+  const seq=String(REQUESTS.filter(r=>r.no&&r.no.includes(ymd)).length+1).padStart(3,"0"); return `REQ-${ymd}-${seq}`; }
+async function submitRequest(){
+  if(!currentUser){ return guestBlock(); }
+  const ids=Object.keys(DOCKET); if(!ids.length)return;
+  const btn=document.getElementById("sendBtn"); btn.disabled=true;
+  if(LIVE){
+    const no=reqNumber();
+    const lines=ids.map(id=>{const i=CATALOG.find(x=>x.id===id)||{};return{name:i.name,supplier:i.supplier,category:i.category,unit:i.unit,code:i.code,qty:DOCKET[id]};});
+    const { data:reqRow, error } = await sb.from("requests").insert({
+      req_no:no, buyer_id:currentUser.id, buyer_company:currentUser.company, buyer_reg_no:currentUser.regNo,
+      contact_name:currentUser.contactName, email:currentUser.email, phone:currentUser.phone, note:val("bNote")
+    }).select().single();
+    if(error){ btn.disabled=false; return toast(error.message,true); }
+    await sb.from("request_lines").insert(lines.map(l=>({request_id:reqRow.id,item_name:l.name,supplier_name:l.supplier,category:l.category,unit:l.unit,code:l.code,qty:l.qty})));
+    const owners=recipientOwnerIds({lines});
+    if(owners.length) await sb.from("request_recipients").insert(owners.map(o=>({request_id:reqRow.id,supplier_id:o})));
+    DOCKET={}; document.getElementById("bNote").value="";
+    await liveLoadRequests();
+    renderCatalog(); renderDocketPanel(); if(currentUser.role==="supplier")renderInbox();
+    closeDocket(); btn.disabled=false;
+    return toast(`Request <span class="rq">${no}</span> sent to ${owners.length} supplier${owners.length===1?"":"s"}`,false);
+  }
+  REQUESTS=await sGet(K_REQ,true)||REQUESTS;
+  const no=reqNumber();
+  const req={ id:uid(), no, at:Date.now(), buyerId:currentUser.id,
+    name:currentUser.contactName, company:currentUser.company, regNo:currentUser.regNo,
+    email:currentUser.email, phone:currentUser.phone, verified:true,
+    note:val("bNote"),
+    lines:ids.map(id=>{const i=CATALOG.find(x=>x.id===id)||{};return{name:i.name,supplier:i.supplier,category:i.category,unit:i.unit,code:i.code,qty:DOCKET[id]};}) };
+  req.recipients=recipientsFor(req); const rc=req.recipients.length;
+  REQUESTS.unshift(req); await sSet(K_REQ,REQUESTS,true);
+  DOCKET={}; document.getElementById("bNote").value="";
+  renderCatalog(); renderDocketPanel(); if(currentUser.role==="supplier")renderInbox();
+  closeDocket(); btn.disabled=false;
+  toast(`Request <span class="rq">${no}</span> sent to ${rc} supplier${rc===1?"":"s"}`,false);
+}
+
+/* ---------- supplier portal ---------- */
+function renderAsCo(){ const el=document.getElementById("asCo"); if(currentUser)el.innerHTML=`Listing as <b>${esc(currentUser.company)}</b> · reg ${esc(currentUser.regNo)}`; }
+async function addItem(){
+  if(!currentUser||currentUser.role!=="supplier")return;
+  if(!subActive(currentUser.id)){ toast("Your subscription isn't active — subscribe to list stock.",true); return; }
+  const name=val("iName"); if(!name){ return toast("Item name is required.",true); }
+  if(LIVE){
+    const { error } = await sb.from("catalog_items").insert({ owner_id:currentUser.id, supplier_name:currentUser.company,
+      name, category:val("iCat"), unit:val("iUnit"), code:val("iCode"), stock:val("iStock"), description:val("iDesc"), image_url:val("iImg") });
+    if(error){ return toast(error.message,true); }
+    ["iName","iCat","iUnit","iCode","iStock","iDesc","iImg"].forEach(id=>document.getElementById(id).value="");
+    await liveLoad(); refreshFilters(); renderCatalog(); renderSupItems();
+    return toast(`Added "${esc(name)}" to your catalog.`,false);
+  }
+  CATALOG=await sGet(K_CAT,true)||CATALOG;
+  CATALOG.push({ id:uid(), createdAt:Date.now(), ownerId:currentUser.id, supplier:currentUser.company,
+    name, category:val("iCat"), unit:val("iUnit"), code:val("iCode"), stock:val("iStock"), desc:val("iDesc"), img:val("iImg") });
+  await sSet(K_CAT,CATALOG,true);
+  ["iName","iCat","iUnit","iCode","iStock","iDesc","iImg"].forEach(id=>document.getElementById(id).value="");
+  refreshFilters(); renderCatalog(); renderSupItems();
+  toast(`Added "${esc(name)}" to your catalog.`,false);
+}
+async function delItem(id){
+  if(LIVE){
+    const { error } = await sb.from("catalog_items").delete().eq("id",id);
+    if(error){ return toast(error.message,true); }
+    delete DOCKET[id]; await liveLoad(); refreshFilters(); renderCatalog(); renderSupItems(); renderDocketPanel();
+    return;
+  }
+  CATALOG=await sGet(K_CAT,true)||CATALOG;
+  CATALOG=CATALOG.filter(i=>i.id!==id); await sSet(K_CAT,CATALOG,true);
+  delete DOCKET[id];
+  refreshFilters(); renderCatalog(); renderSupItems(); renderDocketPanel();
+}
+async function resetDemo(){
+  const all=await sGet(K_ACC,true)||[];
+  const realAcc=all.filter(a=>!a.demo);          // preserve genuinely registered accounts
+  ACCOUNTS=[]; CATALOG=[];
+  await seedIfEmpty();                            // rebuild demo suppliers, demo buyer, sample catalog
+  ACCOUNTS=ACCOUNTS.concat(realAcc);
+  await sSet(K_ACC,ACCOUNTS,true);
+  REQUESTS=[]; await sSet(K_REQ,REQUESTS,true);
+  DOCKET={};
+  refreshFilters(); renderCatalog(); renderSupItems(); renderInbox(); renderDocketPanel();
+  toast("Demo catalog and requests reset.",false);
+}
+function renderSupItems(){
+  if(!currentUser)return;
+  const list=CATALOG.filter(i=>i.ownerId===currentUser.id||i.supplier===currentUser.company);
+  const box=document.getElementById("supItems");
+  if(!list.length){ box.innerHTML=`<div class="section-empty"><div class="big">No items yet</div>Add stock using the form on the left.</div>`; return; }
+  box.innerHTML=list.map(i=>{ const g=(i.category||i.name||"?").charAt(0).toUpperCase();
+    const mini=i.img?`<img class="mini" src="${esc(i.img)}" onerror="this.outerHTML='<div class=\\'mini\\'>${esc(g)}</div>'">`:`<div class="mini">${esc(g)}</div>`;
+    return `<div class="sup-item">${mini}<div class="si-info"><div class="si-name">${esc(i.name)}</div>
+      <div class="si-meta">${esc(i.category||"—")}${i.code?` · ${esc(i.code)}`:""}${i.unit?` · ${esc(i.unit)}`:""}</div></div>
+      <button class="iconbtn" onclick="delItem('${i.id}')">Delete</button></div>`; }).join("");
+}
+async function renderInbox(){
+  if(!currentUser)return;
+  const box=document.getElementById("reqInbox");
+  if(!subActive(currentUser.id)){
+    document.getElementById("reqCount").textContent="0";
+    box.innerHTML=`<div class="section-empty"><div class="big">Subscription inactive</div>Renew your subscription to receive and view buyer price requests.</div>`;
+    return;
+  }
+  if(LIVE){ await liveLoadRequests(); } else { REQUESTS=await sGet(K_REQ,true)||REQUESTS; }
+  const me=currentUser.company;
+  const reqs=REQUESTS.filter(r=>(r.lines||[]).some(l=>matchingItemsFor(me,l).length));
+  document.getElementById("reqCount").textContent=reqs.length;
+  if(!reqs.length){ box.innerHTML=`<div class="section-empty"><div class="big">No requests yet</div>When a buyer requests something similar to your stock, it appears here.</div>`; return; }
+  box.innerHTML=reqs.map(r=>{
+    const when=new Date(r.at).toLocaleString([], {day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"});
+    const recips=recipientsFor(r);
+    const chips=recips.length?`<div class="recips"><span class="rlab">Also sent to</span>${recips.map(s=>`<span class="chip${s===me?" me":""}">${esc(s)}</span>`).join("")}</div>`:"";
+    const lines=(r.lines||[]).map(l=>{ const q=`${esc(l.qty)}${l.unit?` ${esc(l.unit)}`:""}`;
+      const mine=matchingItemsFor(me,l);
+      const note=mine.length?`<div class="rl-match">you carry: ${mine.map(m=>esc(m.name)+(m.code?` (${esc(m.code)})`:"")).join(", ")}</div>`:`<div class="rl-match none">no matching item in your catalog</div>`;
+      return `<div class="rl-block${mine.length?"":" faded"}"><div class="rl"><span>${esc(l.name)}</span><span class="q">${q}</span></div>${note}</div>`;
+    }).join("");
+    return `<div class="req-card"><div class="req-head"><span class="req-no">${esc(r.no)}</span><span class="req-when">${when}</span></div>
+      <div class="req-who"><b>${esc(r.company)}</b> <span class="vchk">✓ verified</span><br>
+        <span style="color:var(--muted);font-family:'IBM Plex Mono';font-size:12px">${esc(r.name)} · ${esc(r.email)} · ${esc(r.phone)}${r.regNo?` · reg ${esc(r.regNo)}`:""}</span></div>
+      ${chips}<div class="req-lines">${lines}</div>${r.note?`<div class="req-note">${esc(r.note)}</div>`:""}</div>`;
+  }).join("");
+}
+
+/* ---------- demo admin ---------- */
+async function demoAdmin(){ ACCOUNTS=await sGet(K_ACC,true)||ACCOUNTS; const a=ACCOUNTS.find(x=>x.isAdmin)||ACCOUNTS.find(x=>x.email==="admin@demo.mv"); if(a) startSession(a); else toast("No admin account seeded.",true); }
+
+/* ---------- ad banners ---------- */
+function renderAds(){
+  const slot=document.getElementById("adSlot");
+  const list=ADS.filter(a=>a.active&&(a.placement||"catalog_top")==="catalog_top");
+  if(adTimer){ clearInterval(adTimer); adTimer=null; }
+  if(!list.length){ slot.classList.add("hidden"); slot.innerHTML=""; return; }
+  slot.classList.remove("hidden");
+  const pool=[]; list.forEach(a=>{ const w=Math.max(1,a.weight||1); for(let i=0;i<w;i++) pool.push(a); });
+  let idx=Math.floor(Math.random()*pool.length);
+  const paint=()=>{ slot.innerHTML=adHTML(pool[idx%pool.length]); idx++; };
+  paint();
+  if(pool.length>1) adTimer=setInterval(paint,6000);
+}
+function adHTML(a){
+  const bg=a.img?`<img src="${esc(a.img)}" alt="" onerror="this.style.display='none'">`:"";
+  const href=a.link?` href="${esc(a.link)}" target="_blank" rel="noopener"`:` href="javascript:void(0)"`;
+  return `<a class="adbanner"${href}>${bg}<div class="adinner"><div class="adtitle">${esc(a.title)}</div><span class="adcta">Learn more →</span></div><span class="adtag">Sponsored</span></a>`;
+}
+
+/* ---------- supplier subscription ---------- */
+function planLabel(p){ return p ? `${esc(p.name)} · MVR ${esc(p.price)} / ${esc(p.days)} days` : "No plan available"; }
+function renderSubPanel(){
+  const el=document.getElementById("subPanel"); if(!el||!currentUser) return;
+  const my=SUBS.filter(s=>s.supplierId===currentUser.id).sort((a,b)=>b.createdAt-a.createdAt);
+  const active=my.find(s=>s.status==="active"&&Number(s.expiresAt)>Date.now());
+  const pending=my.find(s=>s.status==="pending");
+  const plan=PLANS.find(p=>p.active)||PLANS[0];
+  if(active){
+    const days=Math.max(0,Math.ceil((active.expiresAt-Date.now())/864e5));
+    el.innerHTML=`<span class="sbadge active">✓ Active</span><div class="sinfo">Subscription active — <b>${esc(planName(active.planId))}</b> · expires ${new Date(active.expiresAt).toLocaleDateString()} (${days} day${days===1?"":"s"} left).</div>`;
+  } else if(pending){
+    el.innerHTML=`<span class="sbadge pending">Pending</span><div class="sinfo">Payment under review (ref <b>${esc(pending.ref||"—")}</b>). An admin will activate it shortly.</div>`;
+  } else {
+    el.innerHTML=`<span class="sbadge none">Inactive</span><div class="sinfo">Subscribe to list stock and receive price requests.</div>
+      <div class="plan-buy"><span class="pname">${planLabel(plan)}</span>${plan?`<button class="sub-btn" onclick="subscribe('${plan.id}')">Subscribe</button>`:""}</div>`;
+  }
+}
+async function subscribe(planId){
+  const plan=PLANS.find(p=>p.id===planId); if(!plan)return;
+  const ref=prompt(`Enter your bank-transfer reference for MVR ${plan.price} (${plan.name}):`);
+  if(ref===null)return;
+  if(LIVE){
+    const { error } = await sb.from("subscriptions").insert({ supplier_id:currentUser.id, plan_id:planId, status:"pending", payment_ref:(ref.trim()||"(none)") });
+    if(error){ return toast(error.message,true); }
+    await liveLoad(); renderSubPanel();
+    return toast("Subscription submitted — awaiting admin approval.",false);
+  }
+  SUBS=await sGet(K_SUBS,true)||SUBS;
+  SUBS.push({id:uid(),supplierId:currentUser.id,planId,status:"pending",ref:(ref.trim()||"(none)"),startsAt:null,expiresAt:null,createdAt:Date.now()});
+  await sSet(K_SUBS,SUBS,true);
+  renderSubPanel();
+  toast("Subscription submitted — awaiting admin approval.",false);
+}
+
+/* ---------- admin panel ---------- */
+const planName=id=>(PLANS.find(p=>p.id===id)||{}).name||"Plan";
+const accCo=id=>(ACCOUNTS.find(a=>a.id===id)||{}).company||"—";
+function admTab(sec){
+  document.querySelectorAll(".admtabs button").forEach(b=>b.classList.toggle("active",b.dataset.sec===sec));
+  const map={accounts:"secAccounts",subs:"secSubs",plans:"secPlans",ads:"secAds",reqs:"secReqs"};
+  document.querySelectorAll(".admsec").forEach(s=>s.classList.remove("on"));
+  document.getElementById(map[sec]).classList.add("on");
+}
+async function renderAdmin(){
+  if(LIVE){ await liveLoadAdmin(); }
+  else { ACCOUNTS=await sGet(K_ACC,true)||ACCOUNTS; SUBS=await sGet(K_SUBS,true)||SUBS;
+    PLANS=await sGet(K_PLANS,true)||PLANS; ADS=await sGet(K_ADS,true)||ADS; REQUESTS=await sGet(K_REQ,true)||REQUESTS; }
+  renderAdmAccounts(); renderAdmSubs(); renderAdmPlans(); renderAdmAds(); renderAdmReqs();
+}
+function renderAdmAccounts(){
+  const list=ACCOUNTS.filter(a=>!a.isAdmin).sort((a,b)=>(a.status==="review"?-1:0)-(b.status==="review"?-1:0));
+  document.getElementById("admAccounts").innerHTML=list.map(a=>`<div class="arow">
+    <div class="agrow"><div class="aname">${esc(a.company)} <span class="tag ${esc(a.status)}">${esc(a.status)}</span></div>
+    <div class="ameta">${esc(a.role)}${a.regNo?" · "+esc(a.regNo):""} · ${esc(a.email)}${a.phone?" · "+esc(a.phone):""}</div></div>
+    <div class="actions">
+      ${a.status==="review"?`<button class="btn-xs ok" onclick="admSetStatus('${a.id}','active')">Approve</button>`:""}
+      ${a.status==="suspended"?`<button class="btn-xs ok" onclick="admSetStatus('${a.id}','active')">Reactivate</button>`
+        :`<button class="btn-xs bad" onclick="admSetStatus('${a.id}','suspended')">Suspend</button>`}
+    </div></div>`).join("")||`<div class="section-empty">No accounts.</div>`;
+}
+async function admSetStatus(id,status){
+  if(LIVE){ const { error }=await sb.from("profiles").update({status}).eq("id",id);
+    if(error)return toast(error.message,true); await liveLoadAdmin(); renderAdmAccounts(); return toast("Account "+status+".",false); }
+  ACCOUNTS=await sGet(K_ACC,true)||ACCOUNTS; const a=ACCOUNTS.find(x=>x.id===id); if(!a)return;
+  a.status=status; await sSet(K_ACC,ACCOUNTS,true); renderAdmAccounts(); toast("Account "+status+".",false);
+}
+function renderAdmSubs(){
+  const list=[...SUBS].sort((a,b)=>b.createdAt-a.createdAt);
+  document.getElementById("admSubs").innerHTML=list.map(s=>`<div class="arow">
+    <div class="agrow"><div class="aname">${esc(accCo(s.supplierId))} <span class="tag ${esc(s.status)}">${esc(s.status)}</span></div>
+    <div class="ameta">${esc(planName(s.planId))}${s.ref?" · ref "+esc(s.ref):""}${s.expiresAt?" · expires "+new Date(s.expiresAt).toLocaleDateString():""}</div></div>
+    <div class="actions">
+      ${s.status==="pending"?`<button class="btn-xs ok" onclick="admApproveSub('${s.id}')">Approve</button><button class="btn-xs bad" onclick="admSetSub('${s.id}','rejected')">Reject</button>`:""}
+      ${s.status==="active"?`<button class="btn-xs" onclick="admExtendSub('${s.id}')">+30d</button><button class="btn-xs bad" onclick="admSetSub('${s.id}','cancelled')">Cancel</button>`:""}
+    </div></div>`).join("")||`<div class="section-empty">No subscriptions.</div>`;
+}
+async function admApproveSub(id){
+  const s=SUBS.find(x=>x.id===id)||{}; const plan=PLANS.find(p=>p.id===s.planId)||{days:30}; const now=Date.now();
+  if(LIVE){ const { error }=await sb.from("subscriptions").update({status:"active",starts_at:new Date(now).toISOString(),expires_at:new Date(now+(plan.days||30)*864e5).toISOString(),approved_by:currentUser.id}).eq("id",id);
+    if(error)return toast(error.message,true); await liveLoadAdmin(); renderAdmSubs(); return toast("Subscription activated.",false); }
+  SUBS=await sGet(K_SUBS,true)||SUBS; const s2=SUBS.find(x=>x.id===id); if(!s2)return;
+  s2.status="active"; s2.startsAt=now; s2.expiresAt=now+(plan.days||30)*864e5; s2.approvedBy=currentUser.id;
+  await sSet(K_SUBS,SUBS,true); renderAdmSubs(); toast("Subscription activated for "+accCo(s2.supplierId)+".",false);
+}
+async function admSetSub(id,status){
+  if(LIVE){ const { error }=await sb.from("subscriptions").update({status}).eq("id",id);
+    if(error)return toast(error.message,true); await liveLoadAdmin(); renderAdmSubs(); return toast("Subscription "+status+".",false); }
+  SUBS=await sGet(K_SUBS,true)||SUBS; const s=SUBS.find(x=>x.id===id); if(!s)return;
+  s.status=status; await sSet(K_SUBS,SUBS,true); renderAdmSubs(); toast("Subscription "+status+".",false);
+}
+async function admExtendSub(id){
+  const s=SUBS.find(x=>x.id===id)||{}; const base=Math.max(Date.now(),Number(s.expiresAt)||Date.now());
+  if(LIVE){ const { error }=await sb.from("subscriptions").update({status:"active",expires_at:new Date(base+30*864e5).toISOString()}).eq("id",id);
+    if(error)return toast(error.message,true); await liveLoadAdmin(); renderAdmSubs(); return toast("Extended 30 days.",false); }
+  SUBS=await sGet(K_SUBS,true)||SUBS; const s2=SUBS.find(x=>x.id===id); if(!s2)return;
+  s2.expiresAt=base+30*864e5; s2.status="active"; await sSet(K_SUBS,SUBS,true); renderAdmSubs(); toast("Extended 30 days.",false);
+}
+function renderAdmPlans(){
+  document.getElementById("admPlans").innerHTML=PLANS.map(p=>`<div class="arow">
+    <div class="agrow"><div class="aname">${esc(p.name)} ${p.active?'<span class="tag active">active</span>':'<span class="tag expired">off</span>'}</div>
+    <div class="ameta">MVR ${esc(p.price)} · ${esc(p.days)} days</div></div>
+    <div class="actions"><button class="btn-xs" onclick="admEditPlan('${p.id}')">Edit price</button>
+      <button class="btn-xs" onclick="admTogglePlan('${p.id}')">${p.active?"Disable":"Enable"}</button></div></div>`).join("")||`<div class="section-empty">No plans.</div>`;
+}
+async function admEditPlan(id){
+  const p=PLANS.find(x=>x.id===id); if(!p)return;
+  const v=prompt("New price (MVR) for "+p.name+":",p.price); if(v===null)return;
+  if(LIVE){ const { error }=await sb.from("plans").update({price_mvr:Number(v)||p.price}).eq("id",id);
+    if(error)return toast(error.message,true); await liveLoadAdmin(); renderAdmPlans(); return toast("Plan updated.",false); }
+  PLANS=await sGet(K_PLANS,true)||PLANS; const p2=PLANS.find(x=>x.id===id); if(!p2)return;
+  p2.price=Number(v)||p2.price; await sSet(K_PLANS,PLANS,true); renderAdmPlans(); renderSubPanel(); toast("Plan updated.",false);
+}
+async function admTogglePlan(id){
+  const p=PLANS.find(x=>x.id===id); if(!p)return;
+  if(LIVE){ const { error }=await sb.from("plans").update({active:!p.active}).eq("id",id);
+    if(error)return toast(error.message,true); await liveLoadAdmin(); renderAdmPlans(); return toast("Plan updated.",false); }
+  PLANS=await sGet(K_PLANS,true)||PLANS; const p2=PLANS.find(x=>x.id===id); if(!p2)return;
+  p2.active=!p2.active; await sSet(K_PLANS,PLANS,true); renderAdmPlans(); toast("Plan "+(p2.active?"enabled":"disabled")+".",false);
+}
+async function admAddPlan(){
+  const name=val("npName"); if(!name)return toast("Plan name required.",true);
+  if(LIVE){ const { error }=await sb.from("plans").insert({name,price_mvr:Number(val("npPrice"))||0,period_days:Number(val("npDays"))||30,active:true});
+    if(error)return toast(error.message,true); ["npName","npPrice"].forEach(i=>document.getElementById(i).value=""); await liveLoadAdmin(); renderAdmPlans(); return toast("Plan added.",false); }
+  PLANS=await sGet(K_PLANS,true)||PLANS;
+  PLANS.push({id:uid(),name,price:Number(val("npPrice"))||0,days:Number(val("npDays"))||30,active:true});
+  await sSet(K_PLANS,PLANS,true); ["npName","npPrice"].forEach(i=>document.getElementById(i).value="");
+  renderAdmPlans(); toast("Plan added.",false);
+}
+function renderAdmAds(){
+  document.getElementById("admAds").innerHTML=ADS.map(a=>`<div class="arow">
+    <div class="agrow"><div class="aname">${esc(a.title)} ${a.active?'<span class="tag active">active</span>':'<span class="tag expired">off</span>'}</div>
+    <div class="ameta">${esc(a.placement||"catalog_top")} · weight ${esc(a.weight||1)}${a.link?" · "+esc(a.link):""}</div></div>
+    <div class="actions"><button class="btn-xs" onclick="admToggleAd('${a.id}')">${a.active?"Disable":"Enable"}</button>
+      <button class="btn-xs bad" onclick="admDelAd('${a.id}')">Delete</button></div></div>`).join("")||`<div class="section-empty">No banners.</div>`;
+}
+async function admAddAd(){
+  const title=val("naTitle"); if(!title)return toast("Banner text required.",true);
+  if(LIVE){ const { error }=await sb.from("ads").insert({title,link_url:val("naLink"),image_url:val("naImg"),placement:"catalog_top",weight:1,active:true});
+    if(error)return toast(error.message,true); ["naTitle","naLink","naImg"].forEach(i=>document.getElementById(i).value=""); await liveLoadAdmin(); renderAdmAds(); return toast("Banner added.",false); }
+  ADS=await sGet(K_ADS,true)||ADS;
+  ADS.push({id:uid(),title,link:val("naLink"),img:val("naImg"),placement:"catalog_top",weight:1,active:true});
+  await sSet(K_ADS,ADS,true); ["naTitle","naLink","naImg"].forEach(i=>document.getElementById(i).value="");
+  renderAdmAds(); toast("Banner added.",false);
+}
+async function admToggleAd(id){
+  const a=ADS.find(x=>x.id===id); if(!a)return;
+  if(LIVE){ const { error }=await sb.from("ads").update({active:!a.active}).eq("id",id);
+    if(error)return toast(error.message,true); await liveLoadAdmin(); renderAdmAds(); return toast("Banner updated.",false); }
+  ADS=await sGet(K_ADS,true)||ADS; const a2=ADS.find(x=>x.id===id); if(!a2)return;
+  a2.active=!a2.active; await sSet(K_ADS,ADS,true); renderAdmAds(); toast("Banner "+(a2.active?"enabled":"disabled")+".",false);
+}
+async function admDelAd(id){
+  if(LIVE){ const { error }=await sb.from("ads").delete().eq("id",id);
+    if(error)return toast(error.message,true); await liveLoadAdmin(); renderAdmAds(); return toast("Banner deleted.",false); }
+  ADS=await sGet(K_ADS,true)||ADS; ADS=ADS.filter(a=>a.id!==id); await sSet(K_ADS,ADS,true); renderAdmAds(); toast("Banner deleted.",false);
+}
+function renderAdmReqs(){
+  const list=[...REQUESTS].sort((a,b)=>b.at-a.at);
+  document.getElementById("admReqs").innerHTML=list.map(r=>{
+    const recips=recipientsFor(r);
+    return `<div class="arow"><div class="agrow"><div class="aname">${esc(r.no)} — ${esc(r.company)}</div>
+      <div class="ameta">${new Date(r.at).toLocaleString()} · ${(r.lines||[]).length} item(s) · routed to ${recips.length} supplier(s)</div></div></div>`;
+  }).join("")||`<div class="section-empty">No requests yet.</div>`;
+}
+
+/* ---------- bulk upload + requirement matching ---------- */
+function splitRows(text){ return (text||"").split(/\r?\n/).map(r=>r.trim()).filter(Boolean); }
+function splitCols(row){
+  if(row.indexOf("\t")>=0) return row.split("\t").map(c=>c.trim());
+  const out=[]; let cur="",q=false;
+  for(const ch of row){ if(ch==='"'){q=!q;} else if(ch===","&&!q){out.push(cur);cur="";} else cur+=ch; }
+  out.push(cur); return out.map(c=>c.trim().replace(/^"|"$/g,""));
+}
+function loadFileTo(inputId,textareaId,cb){
+  const f=document.getElementById(inputId).files[0]; if(!f)return;
+  const r=new FileReader(); r.onload=()=>{ document.getElementById(textareaId).value=r.result; if(cb)cb(); }; r.readAsText(f);
+}
+/* supplier: parse pasted/CSV stock rows */
+function parseBulkItems(text){
+  const rows=splitRows(text); if(!rows.length) return [];
+  const idx={name:0,category:1,unit:2,code:3,stock:4,desc:5}; let start=0;
+  const first=splitCols(rows[0]).map(c=>c.toLowerCase());
+  if(first.some(c=>/^(name|item|item name|category|unit|code|sku|stock|qty|description)$/.test(c))){
+    start=1; const map={};
+    first.forEach((h,i)=>{ if(/name|item/.test(h)&&map.name==null)map.name=i;
+      else if(/categor/.test(h))map.category=i; else if(/unit/.test(h))map.unit=i;
+      else if(/code|sku/.test(h))map.code=i; else if(/stock|qty|quantity/.test(h))map.stock=i;
+      else if(/desc/.test(h))map.desc=i; });
+    Object.assign(idx,map);
+  }
+  const out=[];
+  for(let i=start;i<rows.length;i++){ const c=splitCols(rows[i]); const name=(c[idx.name]||"").trim(); if(!name)continue;
+    out.push({name, category:(c[idx.category]||"").trim(), unit:(c[idx.unit]||"").trim(),
+              code:(c[idx.code]||"").trim(), stock:(c[idx.stock]||"").trim(), desc:(c[idx.desc]||"").trim()}); }
+  return out;
+}
+let BULK=[];
+function previewBulk(){
+  BULK=parseBulkItems(document.getElementById("bulkText").value);
+  const box=document.getElementById("bulkPreview"), btn=document.getElementById("bulkAddBtn");
+  if(!BULK.length){ box.innerHTML=`<div class="bmsg">Nothing to add yet — paste rows above.</div>`; btn.disabled=true; btn.textContent="Add all"; return; }
+  btn.disabled=false; btn.textContent=`Add all ${BULK.length}`;
+  box.innerHTML=`<table class="btbl"><thead><tr><th>Name</th><th>Category</th><th>Unit</th><th>Code</th><th>Stock</th></tr></thead><tbody>`+
+    BULK.slice(0,50).map(i=>`<tr><td>${esc(i.name)}</td><td>${esc(i.category)}</td><td>${esc(i.unit)}</td><td>${esc(i.code)}</td><td>${esc(i.stock)}</td></tr>`).join("")+
+    `</tbody></table>`+(BULK.length>50?`<div class="bmsg">…and ${BULK.length-50} more</div>`:"");
+}
+async function addBulkItems(){
+  if(!currentUser||currentUser.role!=="supplier")return;
+  if(!subActive(currentUser.id)){ return toast("Your subscription isn't active — subscribe to list stock.",true); }
+  if(!BULK.length){ previewBulk(); if(!BULK.length)return; }
+  const btn=document.getElementById("bulkAddBtn"); btn.disabled=true;
+  if(LIVE){
+    const rows=BULK.map(i=>({owner_id:currentUser.id,supplier_name:currentUser.company,name:i.name,category:i.category,unit:i.unit,code:i.code,stock:i.stock,description:i.desc||""}));
+    const { error }=await sb.from("catalog_items").insert(rows);
+    if(error){ btn.disabled=false; return toast(error.message,true); }
+    await liveLoad();
+  } else {
+    CATALOG=await sGet(K_CAT,true)||CATALOG;
+    BULK.forEach(i=>CATALOG.push({id:uid(),createdAt:Date.now(),ownerId:currentUser.id,supplier:currentUser.company,name:i.name,category:i.category,unit:i.unit,code:i.code,stock:i.stock,desc:i.desc||"",img:""}));
+    await sSet(K_CAT,CATALOG,true);
+  }
+  const n=BULK.length; BULK=[]; document.getElementById("bulkText").value=""; document.getElementById("bulkPreview").innerHTML="";
+  refreshFilters(); renderCatalog(); renderSupItems();
+  toast(`Added ${n} item${n>1?"s":""} to your catalog.`,false);
+}
+
+/* buyer: parse a requirement list (name[, qty[, unit]]) */
+function parseRequirements(text){
+  const rows=splitRows(text); if(!rows.length) return [];
+  let start=0; const first=splitCols(rows[0]).map(c=>c.toLowerCase());
+  if(first.some(c=>/^(name|item|item name|qty|quantity|unit)$/.test(c))) start=1;
+  const reqs=[];
+  for(let i=start;i<rows.length;i++){
+    const cols=splitCols(rows[i]); let name=cols[0]||"", qty=1, unit="";
+    if(cols.length>=2&&/^\d+/.test(cols[1])) qty=parseInt(cols[1])||1;
+    if(cols.length>=3) unit=cols[2]||"";
+    if(cols.length<2){
+      let m=name.match(/\s*[x*]\s*(\d+)\s*$/i); if(m){qty=parseInt(m[1])||1;name=name.replace(/\s*[x*]\s*\d+\s*$/i,"").trim();}
+      else{ m=name.match(/^(\d+)\s*[x*]\s+/i); if(m){qty=parseInt(m[1])||1;name=name.replace(/^\d+\s*[x*]\s+/i,"").trim();} }
+    }
+    name=name.trim(); if(name) reqs.push({name,qty:Math.max(1,qty),unit});
+  }
+  return reqs;
+}
+/* score catalog items against a free-text requirement */
+const MSTOP=new Set(["the","and","for","with","pcs","set","pack","box","bag","kg","pc","inch","inches","mm","cm","class","size","pair","roll","length","sheet","can","pail"]);
+function tokset(str){ return new Set((str||"").toLowerCase().replace(/[^a-z0-9]+/g," ").split(" ").filter(t=>t.length>1&&!MSTOP.has(t))); }
+function matchRequirement(reqName){
+  const rt=[...tokset(reqName)]; if(!rt.length) return [];
+  const low=reqName.toLowerCase(), scored=[];
+  for(const it of activeItems()){
+    const itoks=tokset((it.name||"")+" "+(it.category||""));
+    let shared=0; rt.forEach(t=>{ if(itoks.has(t)) shared++; });
+    const codeHit=it.code&&it.code.length>=3&&low.indexOf(it.code.toLowerCase())>=0;
+    if(!shared&&!codeHit) continue;
+    const coverage=shared/rt.length;
+    if(coverage>=0.5||codeHit) scored.push({item:it,score:(codeHit?1:0)+coverage,shared});
+  }
+  scored.sort((a,b)=> b.score-a.score || b.shared-a.shared);
+  return scored.slice(0,6);
+}
+let MATCHES=[];
+function openReqMatch(){ document.getElementById("reqModal").classList.add("show"); }
+function closeReqMatch(){ document.getElementById("reqModal").classList.remove("show"); }
+function runMatch(){
+  const reqs=parseRequirements(document.getElementById("reqText").value);
+  MATCHES=reqs.map(r=>{ const m=matchRequirement(r.name); return {req:r,matches:m,picked:m.length?m[0].item.id:null}; });
+  renderMatchResults();
+}
+function pickMatch(idx,id){ MATCHES[idx].picked=id||null; document.getElementById("addMatchedBtn").disabled=!MATCHES.some(x=>x.picked); }
+function renderMatchResults(){
+  const box=document.getElementById("matchResults"), sum=document.getElementById("matchSummary");
+  if(!MATCHES.length){ box.innerHTML=`<div class="bmsg">Nothing to match yet — paste your list and press Match.</div>`; sum.textContent=""; document.getElementById("addMatchedBtn").disabled=true; return; }
+  const matched=MATCHES.filter(x=>x.matches.length).length;
+  sum.innerHTML=`<b>${matched}</b> of ${MATCHES.length} matched`;
+  box.innerHTML=MATCHES.map((x,idx)=>{
+    if(!x.matches.length)
+      return `<div class="mrow nomatch"><div class="mreq"><span class="rqname">${esc(x.req.name)}</span><span class="rqqty">×${x.req.qty}</span></div><div class="mnone">No match in the catalog yet</div></div>`;
+    const opts=x.matches.map(m=>`<label class="mopt"><input type="radio" name="m${idx}" ${x.picked===m.item.id?"checked":""} onchange="pickMatch(${idx},'${m.item.id}')"><span class="mname">${esc(m.item.name)}</span><span class="msup">${esc(m.item.supplier||"—")}</span></label>`).join("");
+    return `<div class="mrow"><div class="mreq"><span class="rqname">${esc(x.req.name)}</span><span class="rqqty">×${x.req.qty}</span><span class="mcount">${x.matches.length} match${x.matches.length>1?"es":""}</span></div>
+      <div class="mopts">${opts}<label class="mopt skip"><input type="radio" name="m${idx}" ${x.picked===null?"checked":""} onchange="pickMatch(${idx},'')"><span class="mname muted">Skip this item</span></label></div></div>`;
+  }).join("");
+  document.getElementById("addMatchedBtn").disabled=!MATCHES.some(x=>x.picked);
+}
+function addMatchedToDocket(){
+  let added=0;
+  MATCHES.forEach(x=>{ if(x.picked&&CATALOG.some(i=>i.id===x.picked)){ DOCKET[x.picked]=Math.max(1,x.req.qty||1); added++; } });
+  closeReqMatch(); renderCatalog(); renderDocketPanel();
+  if(added){ openDocket(); toast(`Added ${added} matched item${added>1?"s":""} to your request.`,false); }
+  else toast("Nothing selected to add.",true);
+}
+
+/* ---------- toast ---------- */
+let toastT;
+function toast(html,isErr){ const t=document.getElementById("toast");
+  t.innerHTML=`<span class="chk">${isErr?"⚠":"✓"}</span><span>${html}</span>`;
+  t.style.background=isErr?"var(--danger)":"var(--ink)";
+  t.classList.add("show"); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove("show"),3200);
+}
+
+function hideDemoUI(){
+  document.querySelectorAll(".demo-quick, .demo-note, .demo-reveal, .divider").forEach(el=>el.style.display="none");
+  document.querySelectorAll("button").forEach(b=>{ const oc=b.getAttribute("onclick")||""; if(/demoAdmin\(\)|resetDemo\(\)/.test(oc)) b.style.display="none"; });
+  const otpMsg=document.querySelector(".otp-sent"); if(otpMsg) otpMsg.textContent="We've emailed you a confirmation link. Confirm, then sign in.";
+}
+
+boot();
+</script>
+</body>
+</html>

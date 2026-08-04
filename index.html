@@ -1394,17 +1394,21 @@ const MSTOP=new Set(["the","and","for","with","pcs","set","pack","box","bag","kg
 function tokset(str){ return new Set((str||"").toLowerCase().replace(/[^a-z0-9]+/g," ").split(" ").filter(t=>t.length>1&&!MSTOP.has(t))); }
 function matchRequirement(reqName){
   const rt=[...tokset(reqName)]; if(!rt.length) return [];
-  const low=reqName.toLowerCase(), scored=[];
+  const low=reqName.toLowerCase(), rows=[];
   for(const it of activeItems()){
     const itoks=tokset((it.name||"")+" "+(it.category||""));
     let shared=0; rt.forEach(t=>{ if(itoks.has(t)) shared++; });
     const codeHit=it.code&&it.code.length>=3&&low.indexOf(it.code.toLowerCase())>=0;
-    const need=Math.min(2, rt.length);          // 2 shared words, or all of them if the list has only 1
-    if(codeHit || shared>=need)
-      scored.push({item:it, score:(codeHit?3:0)+shared+shared/rt.length, shared});
+    if(codeHit) shared=rt.length+1;                 // exact code = definitive, ranks above word matches
+    if(shared>0) rows.push({item:it, shared, coverage:shared/rt.length});
   }
-  scored.sort((a,b)=> b.score-a.score || b.shared-a.shared);
-  return scored.slice(0,6);
+  if(!rows.length) return [];
+  // progressive relaxation: try to match all words; if nothing hits that many,
+  // fall to the next-best overlap, and so on — i.e. keep only the best tier found.
+  const max=Math.max(...rows.map(r=>r.shared));
+  return rows.filter(r=>r.shared===max)
+    .sort((a,b)=> b.coverage-a.coverage || (a.item.name||"").length-(b.item.name||"").length)
+    .slice(0,8);
 }
 let MATCHES=[];
 function openReqMatch(){ document.getElementById("reqModal").classList.add("show"); }

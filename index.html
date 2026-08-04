@@ -310,6 +310,9 @@ select.filter{padding:11px 12px;border:1px solid var(--line);border-radius:8px;b
 .cart-note label{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:600;display:block;margin-bottom:3px}
 .cart-foot .send{flex:0 0 auto;min-width:200px}
 .cart-foot .send:disabled{opacity:.5;cursor:not-allowed}
+.cart-subhead{font-family:"IBM Plex Mono";font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--amber-deep);font-weight:600;margin:16px 0 6px;padding-top:12px;border-top:1px dashed var(--line)}
+.incl-unmatched{margin-top:12px;border:1px dashed var(--amber);background:#fff7ec;border-radius:9px;padding:11px 12px;align-items:flex-start}
+.incl-unmatched .mname{font-weight:500;line-height:1.4}
 
 @media(prefers-reduced-motion:reduce){*{transition:none !important}}
 </style>
@@ -1032,37 +1035,45 @@ function guestBlock(){ toast("Sign in with a verified account to request prices.
 function toggleDocket(id){ if(DOCKET[id]!=null)delete DOCKET[id]; else DOCKET[id]=1; renderCatalog(); renderDocketPanel(); }
 function setQty(id,v){ DOCKET[id]=Math.max(1,parseInt(v)||1); renderDocketPanel(); }
 function bumpQty(id,d){ setQty(id,(DOCKET[id]||1)+d); }
-let CART_TAB="all";
+let CART_TAB="all", CUSTOM=[];
 function cartSupplierMap(items){
   const m=new Map();
   items.forEach(({id,i})=>{ suppliersFor(i).forEach(s=>{ if(!m.has(s))m.set(s,[]); m.get(s).push({id,i}); }); });
   return m;
 }
 function renderDocketPanel(){
-  const ids=Object.keys(DOCKET), n=ids.length;
+  const ids=Object.keys(DOCKET), n=ids.length+CUSTOM.length;
   document.getElementById("hCount").textContent=n;
   document.getElementById("docketNum").textContent=n?`${n} item${n>1?"s":""}`:"";
   const tabs=document.getElementById("cartTabs"), body=document.getElementById("cartBody"), idBox=document.getElementById("docketId"), send=document.getElementById("sendBtn");
   const items=ids.map(id=>({id,i:CATALOG.find(x=>x.id===id)})).filter(x=>x.i);
-  if(!items.length){
+  if(!items.length && !CUSTOM.length){
     tabs.innerHTML=""; idBox.classList.add("hidden"); send.disabled=true;
     body.innerHTML=`<div class="empty-docket section-empty"><div class="big">Nothing added yet</div>Add items from the catalog, then send one price request.</div>`;
     return;
   }
-  send.disabled=false;
+  send.disabled=!items.length;   // need at least one catalogued item so there's a supplier to send to
   const supMap=cartSupplierMap(items), supNames=[...supMap.keys()].sort();
+  const customRows=(preview)=>CUSTOM.map((c,ci)=> preview
+    ? `<div class="dline preview"><div class="dinfo"><div class="dname">${esc(c.name)}</div><div class="dsup">open enquiry · not yet stocked${c.unit?` · ${esc(c.unit)}`:""}</div></div><div class="qcol">×${c.qty}</div></div>`
+    : `<div class="dline"><div class="dinfo"><div class="dname">${esc(c.name)}</div><div class="dsup">open enquiry · not yet stocked${c.unit?` · ${esc(c.unit)}`:""}</div></div>
+        <div class="qty"><button onclick="bumpCustom(${ci},-1)">−</button><input type="number" min="1" value="${c.qty}" onchange="setCustomQty(${ci},this.value)"><button onclick="bumpCustom(${ci},1)">+</button></div>
+        <button class="drop" onclick="removeCustom(${ci})">×</button></div>`).join("");
   if(CART_TAB!=="all" && !supMap.has(CART_TAB)) CART_TAB="all";
-  tabs.innerHTML=`<button class="ctab ${CART_TAB==="all"?"active":""}" onclick="setCartTab('all')">All items <span>${items.length}</span></button>`+
-    supNames.map(s=>`<button class="ctab ${CART_TAB===s?"active":""}" onclick="setCartTab('${s.replace(/'/g,"\\'")}')">${esc(s)} <span>${supMap.get(s).length}</span></button>`).join("");
+  tabs.innerHTML=`<button class="ctab ${CART_TAB==="all"?"active":""}" onclick="setCartTab('all')">All items <span>${n}</span></button>`+
+    supNames.map(s=>`<button class="ctab ${CART_TAB===s?"active":""}" onclick="setCartTab('${s.replace(/'/g,"\\'")}')">${esc(s)} <span>${supMap.get(s).length+CUSTOM.length}</span></button>`).join("");
   if(CART_TAB==="all"){
-    body.innerHTML=`<div class="cart-hint">${supNames.length} supplier${supNames.length===1?"":"s"} will be asked to quote this request. Adjust quantities here, then tap a supplier tab to preview exactly what they'll receive before sending.</div>`+
+    const custBlock=CUSTOM.length?`<div class="cart-subhead">Other — not yet stocked (open enquiries · sent to every supplier on this request)</div>${customRows(false)}`:"";
+    body.innerHTML=(items.length?`<div class="cart-hint">${supNames.length} supplier${supNames.length===1?"":"s"} will be asked to quote this request. Adjust quantities here, then tap a supplier tab to preview exactly what they'll receive before sending.</div>`
+      :`<div class="cart-hint" style="color:var(--danger)">These are open enquiries only — add at least one catalogued item so there's a supplier to send them to.</div>`)+
       items.map(({id,i})=>{ const sf=suppliersFor(i); return `<div class="dline"><div class="dinfo"><div class="dname">${esc(i.name)}</div><div class="dsup">${esc(sf[0]||i.supplier||"—")}${sf.length>1?` +${sf.length-1} more`:""}${i.unit?` · ${esc(i.unit)}`:""}</div></div>
         <div class="qty"><button onclick="bumpQty('${id}',-1)">−</button><input type="number" min="1" value="${DOCKET[id]}" onchange="setQty('${id}',this.value)"><button onclick="bumpQty('${id}',1)">+</button></div>
-        <button class="drop" onclick="toggleDocket('${id}')">×</button></div>`; }).join("");
+        <button class="drop" onclick="toggleDocket('${id}')">×</button></div>`; }).join("")+custBlock;
   } else {
     const list=supMap.get(CART_TAB)||[];
-    body.innerHTML=`<div class="cart-hint"><b>${esc(CART_TAB)}</b> will be asked to quote these ${list.length} item${list.length===1?"":"s"}. Price is requested — nothing is shared but your verified company details and the items below.</div>`+
-      list.map(({id,i})=>`<div class="dline preview"><div class="dinfo"><div class="dname">${esc(i.name)}</div><div class="dsup">${i.code?`code ${esc(i.code)} · `:""}${esc(i.category||"—")}${i.unit?` · ${esc(i.unit)}`:""}</div></div><div class="qcol">×${DOCKET[id]}</div></div>`).join("");
+    body.innerHTML=`<div class="cart-hint"><b>${esc(CART_TAB)}</b> will be asked to quote these ${list.length+CUSTOM.length} item${(list.length+CUSTOM.length)===1?"":"s"}. Price is requested — nothing is shared but your verified company details and the items below.</div>`+
+      list.map(({id,i})=>`<div class="dline preview"><div class="dinfo"><div class="dname">${esc(i.name)}</div><div class="dsup">${i.code?`code ${esc(i.code)} · `:""}${esc(i.category||"—")}${i.unit?` · ${esc(i.unit)}`:""}</div></div><div class="qcol">×${DOCKET[id]}</div></div>`).join("")+
+      (CUSTOM.length?`<div class="cart-subhead">Open enquiries (not yet stocked)</div>${customRows(true)}`:"");
   }
   if(currentUser){
     idBox.classList.remove("hidden");
@@ -1070,6 +1081,9 @@ function renderDocketPanel(){
       <div class="meta">${esc(currentUser.contactName)} · ${esc(currentUser.email)} · ${esc(currentUser.phone)}</div></div>`;
   } else idBox.classList.add("hidden");
 }
+function setCustomQty(i,v){ v=parseInt(v)||1; if(CUSTOM[i]){ CUSTOM[i].qty=Math.max(1,v); renderDocketPanel(); } }
+function bumpCustom(i,d){ if(CUSTOM[i]){ CUSTOM[i].qty=Math.max(1,(CUSTOM[i].qty||1)+d); renderDocketPanel(); } }
+function removeCustom(i){ CUSTOM.splice(i,1); renderDocketPanel(); }
 function setCartTab(t){ CART_TAB=t; renderDocketPanel(); }
 function openDocket(){ CART_TAB="all"; renderDocketPanel(); document.getElementById("cartModal").classList.add("show"); }
 function closeDocket(){ document.getElementById("cartModal").classList.remove("show"); }
@@ -1078,38 +1092,38 @@ function reqNumber(){ const d=new Date(); const ymd=`${d.getFullYear()}${String(
   const seq=String(REQUESTS.filter(r=>r.no&&r.no.includes(ymd)).length+1).padStart(3,"0"); return `REQ-${ymd}-${seq}`; }
 async function submitRequest(){
   if(!currentUser){ return guestBlock(); }
-  const ids=Object.keys(DOCKET); if(!ids.length)return;
+  const ids=Object.keys(DOCKET); if(!ids.length)return;   // need ≥1 catalogued item (a supplier to send to)
   const btn=document.getElementById("sendBtn"); btn.disabled=true;
+  const catLines=ids.map(id=>{const i=CATALOG.find(x=>x.id===id)||{};return{name:i.name,supplier:i.supplier,category:i.category,unit:i.unit,code:i.code,qty:DOCKET[id]};});
+  const customLines=CUSTOM.map(c=>({name:c.name,supplier:"",category:"",unit:c.unit||"",code:"",qty:c.qty,custom:true}));
+  const allLines=[...catLines,...customLines];
   if(LIVE){
     const no=reqNumber();
-    const lines=ids.map(id=>{const i=CATALOG.find(x=>x.id===id)||{};return{name:i.name,supplier:i.supplier,category:i.category,unit:i.unit,code:i.code,qty:DOCKET[id]};});
     const { data:reqRow, error } = await sb.from("requests").insert({
       req_no:no, buyer_id:currentUser.id, buyer_company:currentUser.company, buyer_reg_no:currentUser.regNo,
       contact_name:currentUser.contactName, email:currentUser.email, phone:currentUser.phone, note:val("bNote")
     }).select().single();
     if(error){ btn.disabled=false; return toast(error.message,true); }
-    await sb.from("request_lines").insert(lines.map(l=>({request_id:reqRow.id,item_name:l.name,supplier_name:l.supplier,category:l.category,unit:l.unit,code:l.code,qty:l.qty})));
-    const owners=recipientOwnerIds({lines});
+    await sb.from("request_lines").insert(allLines.map(l=>({request_id:reqRow.id,item_name:l.name,supplier_name:l.supplier,category:l.category,unit:l.unit,code:l.code,qty:l.qty})));
+    const owners=recipientOwnerIds({lines:catLines});    // recipients from catalogued items only
     if(owners.length) await sb.from("request_recipients").insert(owners.map(o=>({request_id:reqRow.id,supplier_id:o})));
-    DOCKET={}; document.getElementById("bNote").value="";
+    DOCKET={}; CUSTOM=[]; document.getElementById("bNote").value="";
     await liveLoadRequests();
     renderCatalog(); renderDocketPanel(); if(currentUser.role==="supplier")renderInbox();
     closeDocket(); btn.disabled=false;
-    return toast(`Request <span class="rq">${no}</span> sent to ${owners.length} supplier${owners.length===1?"":"s"}`,false);
+    return toast(`Request <span class="rq">${no}</span> sent to ${owners.length} supplier${owners.length===1?"":"s"}${customLines.length?` (incl. ${customLines.length} open enquir${customLines.length===1?"y":"ies"})`:""}`,false);
   }
   REQUESTS=await sGet(K_REQ,true)||REQUESTS;
   const no=reqNumber();
   const req={ id:uid(), no, at:Date.now(), buyerId:currentUser.id,
     name:currentUser.contactName, company:currentUser.company, regNo:currentUser.regNo,
-    email:currentUser.email, phone:currentUser.phone, verified:true,
-    note:val("bNote"),
-    lines:ids.map(id=>{const i=CATALOG.find(x=>x.id===id)||{};return{name:i.name,supplier:i.supplier,category:i.category,unit:i.unit,code:i.code,qty:DOCKET[id]};}) };
-  req.recipients=recipientsFor(req); const rc=req.recipients.length;
+    email:currentUser.email, phone:currentUser.phone, verified:true, note:val("bNote"), lines:allLines };
+  req.recipients=recipientsFor({lines:catLines}); const rc=req.recipients.length;
   REQUESTS.unshift(req); await sSet(K_REQ,REQUESTS,true);
-  DOCKET={}; document.getElementById("bNote").value="";
+  DOCKET={}; CUSTOM=[]; document.getElementById("bNote").value="";
   renderCatalog(); renderDocketPanel(); if(currentUser.role==="supplier")renderInbox();
   closeDocket(); btn.disabled=false;
-  toast(`Request <span class="rq">${no}</span> sent to ${rc} supplier${rc===1?"":"s"}`,false);
+  toast(`Request <span class="rq">${no}</span> sent to ${rc} supplier${rc===1?"":"s"}${customLines.length?` (incl. ${customLines.length} open enquir${customLines.length===1?"y":"ies"})`:""}`,false);
 }
 
 /* ---------- supplier portal ---------- */
@@ -1531,11 +1545,13 @@ function runMatch(){
   renderMatchResults();
 }
 function anyPicked(){ return MATCHES.some(x=>x.picked&&x.picked.size); }
-function togglePick(idx,id,on){ const s=MATCHES[idx].picked; if(on)s.add(id); else s.delete(id); document.getElementById("addMatchedBtn").disabled=!anyPicked(); }
+function hasUnmatched(){ return MATCHES.some(x=>!x.matches.length); }
+function updateAddBtn(){ document.getElementById("addMatchedBtn").disabled=!(anyPicked()||hasUnmatched()); }
+function togglePick(idx,id,on){ const s=MATCHES[idx].picked; if(on)s.add(id); else s.delete(id); updateAddBtn(); }
 function renderMatchResults(){
   const box=document.getElementById("matchResults"), sum=document.getElementById("matchSummary");
   if(!MATCHES.length){ box.innerHTML=`<div class="bmsg">Nothing to match yet — paste your list and press Match.</div>`; sum.textContent=""; document.getElementById("addMatchedBtn").disabled=true; return; }
-  const matched=MATCHES.filter(x=>x.matches.length).length;
+  const matched=MATCHES.filter(x=>x.matches.length).length, unmatched=MATCHES.filter(x=>!x.matches.length);
   sum.innerHTML=`<b>${matched}</b> of ${MATCHES.length} matched · tick every supplier you want to quote`;
   box.innerHTML=MATCHES.map((x,idx)=>{
     if(!x.matches.length)
@@ -1543,14 +1559,22 @@ function renderMatchResults(){
     const opts=x.matches.map(m=>`<label class="mopt"><input type="checkbox" ${x.picked.has(m.item.id)?"checked":""} onchange="togglePick(${idx},'${m.item.id}',this.checked)"><span class="mname">${esc(m.item.name)}</span><span class="msup">${esc(m.item.supplier||"—")}</span></label>`).join("");
     return `<div class="mrow"><div class="mreq"><span class="rqname">${esc(x.req.name)}</span><span class="rqqty">×${x.req.qty}</span><span class="mcount">${x.matches.length} match${x.matches.length>1?"es":""}</span></div>
       <div class="mopts">${opts}</div></div>`;
-  }).join("");
-  document.getElementById("addMatchedBtn").disabled=!anyPicked();
+  }).join("")
+  + (unmatched.length?`<label class="mopt incl-unmatched"><input type="checkbox" id="inclUnmatched" checked><span class="mname">Also add the ${unmatched.length} unmatched item${unmatched.length>1?"s":""} — they'll be sent as open enquiries to the suppliers already on this request.</span></label>`:"");
+  updateAddBtn();
 }
 function addMatchedToDocket(){
   let added=0;
   MATCHES.forEach(x=>{ if(x.picked) x.picked.forEach(id=>{ if(CATALOG.some(i=>i.id===id)){ DOCKET[id]=Math.max(1,x.req.qty||1); added++; } }); });
+  let openAdded=0; const incl=document.getElementById("inclUnmatched");
+  if(incl&&incl.checked){
+    MATCHES.filter(x=>!x.matches.length).forEach(x=>{
+      if(!CUSTOM.some(c=>c.name.toLowerCase()===x.req.name.toLowerCase())){ CUSTOM.push({name:x.req.name,qty:Math.max(1,x.req.qty||1),unit:x.req.unit||""}); openAdded++; }
+    });
+  }
   closeReqMatch(); renderCatalog(); renderDocketPanel();
-  if(added){ openDocket(); toast(`Added ${added} matched item${added>1?"s":""} to your request.`,false); }
+  const total=added+openAdded;
+  if(total){ openDocket(); toast(`Added ${added} matched${openAdded?` + ${openAdded} open item${openAdded>1?"s":""}`:""} to your request.`,false); }
   else toast("Nothing selected to add.",true);
 }
 

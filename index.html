@@ -570,8 +570,7 @@ async function sSet(key,val,shared){ if(!hasStore){mem[key+shared]=val;return;} 
    Fill these two in to run against your database. Leave blank to use the
    in-browser demo store. Get both from Supabase ▸ Project Settings ▸ API. */
 const SUPA_URL  = "https://gixzfrfpmhvrpplveojv.supabase.co";                         // e.g. https://xxxx.supabase.co
-const SUPA_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdpeHpmcmZwbWh2cnBwbHZlb2p2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUzMzQxNzMsImV4cCI6MjEwMDkxMDE3M30.DN1QlnsdVVtFmO-3Jw0HNkG-mB6b4O6pqVlK3goWrHw";
-const LIVE = !!(SUPA_URL && SUPA_ANON && window.supabase);
+const SUPA_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdpeHpmcmZwbWh2cnBwbHZlb2p2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUzMzQxNzMsImV4cCI6MjEwMDkxMDE3M30.DN1QlnsdVVtFmO-3Jw0HNkG-mB6b4O6pqVlK3goWrHw";const LIVE = !!(SUPA_URL && SUPA_ANON && window.supabase);
 const sb = LIVE ? window.supabase.createClient(SUPA_URL, SUPA_ANON) : null;
 let myActiveSub = false;                       // current supplier's live sub state
 

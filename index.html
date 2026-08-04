@@ -327,7 +327,7 @@ select.filter{padding:11px 12px;border:1px solid var(--line);border-radius:8px;b
       <button id="mSupplier" onclick="setMode('supplier')">Supplier portal</button>
       <button id="mAdmin" class="hidden" onclick="setMode('admin')">Admin</button>
     </div>
-    <button class="docket-toggle" onclick="openDocket()">Request <span class="count" id="hCount">0</span></button>
+    <button class="docket-toggle" id="reqCartBtn" onclick="openDocket()">Request <span class="count" id="hCount">0</span></button>
     <div class="usermenu" id="usermenu"></div>
   </div>
 </header>
@@ -936,6 +936,7 @@ function enterApp(){
   const isAdm=currentUser&&currentUser.isAdmin;
   document.getElementById("mSupplier").classList.toggle("hidden",!isSup);
   document.getElementById("mAdmin").classList.toggle("hidden",!isAdm);
+  document.getElementById("reqCartBtn").style.display = isSup ? "none" : "inline-flex";
   renderUserMenu();
   refreshFilters(); renderCatalog(); renderDocketPanel();
   if(isSup){ renderAsCo(); renderSubPanel(); renderSupItems(); renderInbox(); }
@@ -1017,7 +1018,8 @@ function productCardHTML(p){
   const i=p.rep, sups=p.suppliers, multi=sups.length>1, inD=DOCKET[i.id]!=null;
   const imgItem=p.group.find(x=>x.img);
   const thumb=imgItem?`<div class="thumb"><img src="${esc(imgItem.img)}" alt="" onerror="this.closest('.thumb').remove()"></div>`:"";
-  const btn = isGuest
+  const btn = (currentUser&&currentUser.role==="supplier") ? ""
+    : isGuest
     ? `<button class="addbtn" onclick="guestBlock()">+ Add</button>`
     : `<button class="addbtn ${inD?"in":""}" onclick="toggleDocket('${i.id}')">${inD?"✓ Added":"+ Add"}</button>`;
   const code=p.group.map(x=>x.code).find(Boolean)||i.code;
@@ -1092,6 +1094,7 @@ function reqNumber(){ const d=new Date(); const ymd=`${d.getFullYear()}${String(
   const seq=String(REQUESTS.filter(r=>r.no&&r.no.includes(ymd)).length+1).padStart(3,"0"); return `REQ-${ymd}-${seq}`; }
 async function submitRequest(){
   if(!currentUser){ return guestBlock(); }
+  if(currentUser.role==="supplier"){ return toast("Supplier accounts can't send price requests. Register a separate buyer account (different email) to buy.",true); }
   const ids=Object.keys(DOCKET); if(!ids.length)return;   // need ≥1 catalogued item (a supplier to send to)
   const btn=document.getElementById("sendBtn"); btn.disabled=true;
   const catLines=ids.map(id=>{const i=CATALOG.find(x=>x.id===id)||{};return{name:i.name,supplier:i.supplier,category:i.category,unit:i.unit,code:i.code,qty:DOCKET[id]};});

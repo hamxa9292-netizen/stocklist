@@ -505,9 +505,9 @@ Safety helmet, Safety, pcs, , 60"></textarea>
         <button class="btn-xs ok" onclick="admAddAd()">Add banner</button>
       </div>
     </div>
-    <div class="panel admsec" id="secProducts"><h3>Products &amp; merging</h3>
-      <p class="hint" style="padding:0 0 8px">Identical listings from different suppliers group into one product automatically. Tick two or more products that are really the same and <b>Merge</b> them; use <b>Split out</b> to pull a wrongly-grouped listing apart.</p>
-      <div class="bulkrow" style="margin:0 0 10px"><button class="btn-xs ok" onclick="mergeSelected()">Merge selected</button><span id="mergeCount" class="msum"></span></div>
+    <div class="panel admsec" id="secProducts"><h3>Master catalog</h3>
+      <p class="hint" style="padding:0 0 8px">Each supplier listing links to a <b>system product</b> with its own code (STK-…) and one name shown to buyers. Identical listings link automatically; tick two that are really the same and <b>Merge</b>, or <b>Split out</b> a wrong one. <b>Rename</b> sets the buyer-facing name. Run <b>Rebuild</b> once after first setup to link existing items.</p>
+      <div class="bulkrow" style="margin:0 0 10px"><button class="btn-xs ok" onclick="mergeSelected()">Merge selected</button><button class="btn-xs" onclick="rebuildMaster()">Rebuild master catalog</button><span id="mergeCount" class="msum"></span></div>
       <div id="admProducts"></div>
     </div>
     <div class="panel admsec" id="secReqs"><h3>All price requests</h3><div id="admReqs"></div></div>
@@ -570,12 +570,13 @@ async function sSet(key,val,shared){ if(!hasStore){mem[key+shared]=val;return;} 
    Fill these two in to run against your database. Leave blank to use the
    in-browser demo store. Get both from Supabase ▸ Project Settings ▸ API. */
 const SUPA_URL  = "https://gixzfrfpmhvrpplveojv.supabase.co";                         // e.g. https://xxxx.supabase.co
-const SUPA_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdpeHpmcmZwbWh2cnBwbHZlb2p2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUzMzQxNzMsImV4cCI6MjEwMDkxMDE3M30.DN1QlnsdVVtFmO-3Jw0HNkG-mB6b4O6pqVlK3goWrHw";const LIVE = !!(SUPA_URL && SUPA_ANON && window.supabase);
+const SUPA_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdpeHpmcmZwbWh2cnBwbHZlb2p2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUzMzQxNzMsImV4cCI6MjEwMDkxMDE3M30.DN1QlnsdVVtFmO-3Jw0HNkG-mB6b4O6pqVlK3goWrHw";const LIVE = !!(SUPA_URL && SUPA_ANON && window.supabase);const LIVE = !!(SUPA_URL && SUPA_ANON && window.supabase);
 const sb = LIVE ? window.supabase.createClient(SUPA_URL, SUPA_ANON) : null;
 let myActiveSub = false;                       // current supplier's live sub state
 
 /* row → app-shape mappers */
-const mapItem=(r,active=true)=>({id:r.id,ownerId:r.owner_id,supplier:r.supplier_name,name:r.name,category:r.category,unit:r.unit,code:r.code,stock:r.stock,desc:r.description,img:r.image_url,productKey:r.product_key||"",_active:active});
+const mapItem=(r,active=true)=>({id:r.id,ownerId:r.owner_id,supplier:r.supplier_name,name:r.name,category:r.category,unit:r.unit,code:r.code,stock:r.stock,desc:r.description,img:r.image_url,productKey:r.product_key||"",productId:r.product_id||"",_active:active});
+const mapProduct=r=>({id:r.id,code:r.item_code,key:r.product_key,name:r.name,category:r.category,unit:r.unit,desc:r.description||""});
 const mapPlan=r=>({id:r.id,name:r.name,price:r.price_mvr,days:r.period_days,active:r.active});
 const mapAd=r=>({id:r.id,title:r.title,img:r.image_url,link:r.link_url,placement:r.placement,weight:r.weight,active:r.active});
 const mapSub=r=>({id:r.id,supplierId:r.supplier_id,planId:r.plan_id,status:r.status,ref:r.payment_ref,startsAt:r.starts_at?Date.parse(r.starts_at):null,expiresAt:r.expires_at?Date.parse(r.expires_at):null,createdAt:Date.parse(r.created_at)});
@@ -593,13 +594,15 @@ async function liveProfile(){
 }
 /* pull everything the current user is allowed to see into the globals */
 async function liveLoad(){
-  const [{data:plans},{data:ads},{data:pub}] = await Promise.all([
+  const [{data:plans},{data:ads},{data:pub},{data:prods}] = await Promise.all([
     sb.from("plans").select("*").order("sort"),
     sb.from("ads").select("*"),
-    sb.from("catalog_items").select("*")            // RLS: public sees only active-subscription items
+    sb.from("catalog_items").select("*"),           // RLS: public sees only active-subscription items
+    sb.from("products").select("*")
   ]);
   PLANS=(plans||[]).map(mapPlan); ADS=(ads||[]).map(mapAd);
   CATALOG=(pub||[]).map(r=>mapItem(r,true));
+  PRODUCTS=(prods||[]).map(mapProduct); PRODMAP={}; PRODUCTS.forEach(p=>PRODMAP[p.id]=p);
   ACCOUNTS=currentUser?[currentUser]:[];
   if(currentUser&&currentUser.role==="supplier"){
     const { data:subs } = await sb.from("subscriptions").select("*").eq("supplier_id",currentUser.id);
@@ -616,16 +619,18 @@ async function liveLoadRequests(){
   REQUESTS=(data||[]).map(mapReq);
 }
 async function liveLoadAdmin(){
-  const [{data:accts},{data:subs},{data:plans},{data:ads},{data:items}] = await Promise.all([
+  const [{data:accts},{data:subs},{data:plans},{data:ads},{data:items},{data:prods}] = await Promise.all([
     sb.from("profiles").select("*").order("created_at",{ascending:false}),
     sb.from("subscriptions").select("*").order("created_at",{ascending:false}),
     sb.from("plans").select("*").order("sort"),
     sb.from("ads").select("*"),
-    sb.from("catalog_items").select("*")
+    sb.from("catalog_items").select("*"),
+    sb.from("products").select("*")
   ]);
   ACCOUNTS=(accts||[]).map(mapProfile); SUBS=(subs||[]).map(mapSub);
   PLANS=(plans||[]).map(mapPlan); ADS=(ads||[]).map(mapAd);
   ALLITEMS=(items||[]).map(r=>mapItem(r,true));
+  PRODUCTS=(prods||[]).map(mapProduct); PRODMAP={}; PRODUCTS.forEach(p=>PRODMAP[p.id]=p);
   await liveLoadRequests();
 }
 /* map a fan-out recipient set to supplier profile ids (for request_recipients) */
@@ -669,7 +674,7 @@ function recipientsFor(req){const s=new Set();(req.lines||[]).forEach(l=>supplie
 /* ---------- state ---------- */
 let ACCOUNTS=[], CATALOG=[], REQUESTS=[], DOCKET={}, currentUser=null, isGuest=false, mode="browse";
 let regRole="buyer", pendingId=null, registryResult=null;
-let PLANS=[], SUBS=[], ADS=[], adTimer=null, ALLITEMS=[];
+let PLANS=[], SUBS=[], ADS=[], adTimer=null, ALLITEMS=[], PRODUCTS=[], PRODMAP={};
 
 /* ---------- business-registry verification ----------
    DEMO ONLY: resolves against a small sample list.
@@ -992,20 +997,30 @@ function canonKey(it){
     .filter(t=>!CK_STOP.has(t));
   return (it.unit||"").toLowerCase().trim()+"|"+[...new Set(toks)].sort().join(" ");
 }
+function groupKeyOf(i){ return (LIVE && i.productId) ? ("pid:"+i.productId) : (i.productKey||canonKey(i)); }
 function productGroups(list){
   const g=new Map();
-  for(const i of list){ const k=i.productKey||canonKey(i); if(!g.has(k))g.set(k,[]); g.get(k).push(i); }
+  for(const i of list){ const k=groupKeyOf(i); if(!g.has(k))g.set(k,[]); g.get(k).push(i); }
   return [...g.values()].map(grp=>{
-    const rep=grp.slice().sort((a,b)=> (((b.desc||"").length+(b.name||"").length)-((a.desc||"").length+(a.name||"").length)) || String(a.id).localeCompare(String(b.id)))[0];
+    const pid=grp[0].productId, master=(LIVE&&pid&&PRODMAP[pid])?PRODMAP[pid]:null;
+    let rep;
+    if(master){                        // show the system's name/description/code for every supplier
+      const base=grp.slice().sort((a,b)=>String(a.id).localeCompare(String(b.id)))[0];
+      rep={...base, name:master.name, desc:master.desc||base.desc, code:master.code, category:master.category||base.category, unit:master.unit||base.unit};
+    } else {
+      rep=grp.slice().sort((a,b)=> (((b.desc||"").length+(b.name||"").length)-((a.desc||"").length+(a.name||"").length)) || String(a.id).localeCompare(String(b.id)))[0];
+    }
     const suppliers=[...new Set(grp.map(x=>x.supplier).filter(Boolean))];
-    return {rep, group:grp, suppliers};
+    return {rep, group:grp, suppliers, master};
   }).sort((a,b)=> (a.rep.name||"").localeCompare(b.rep.name||""));
 }
 function renderCatalog(){
   const q=val("search").toLowerCase(), fc=document.getElementById("fCat").value, fs=document.getElementById("fSup").value;
   const list=activeItems().filter(i=>{
     if(fc&&i.category!==fc)return false; if(fs&&i.supplier!==fs)return false;
-    if(q){ if(!`${i.name} ${i.supplier} ${i.category} ${i.code} ${i.desc}`.toLowerCase().includes(q))return false; }
+    if(q){ const m=(LIVE&&i.productId&&PRODMAP[i.productId])?PRODMAP[i.productId]:null;
+      const hay=`${i.name} ${i.supplier} ${i.category} ${i.code} ${i.desc} ${m?m.name+" "+m.code+" "+m.desc:""}`.toLowerCase();
+      if(!hay.includes(q))return false; }
     return true;
   });
   const products=productGroups(list);
@@ -1135,18 +1150,32 @@ function joinNotice(name,category,unit,code){
   const others=[...new Set(activeItems().filter(i=>(i.productKey||canonKey(i))===key && i.supplier!==currentUser.company).map(i=>i.supplier))];
   return others.length?` Listed under an existing product — also carried by ${others.slice(0,3).join(", ")}${others.length>3?" +more":""}.`:"";
 }
+async function getOrCreateProduct(name,category,unit){
+  const key=canonKey({name,category,unit});
+  const { data, error } = await sb.rpc("get_or_create_product",{p_key:key,p_name:name,p_category:category,p_unit:unit});
+  if(error) throw error;
+  return Array.isArray(data)?data[0]:data;   // products row
+}
+function masterNotice(prod){
+  if(!prod) return "";
+  const others=CATALOG.filter(i=>i.productId===prod.id && i.supplier!==currentUser.company).map(i=>i.supplier);
+  const u=[...new Set(others)];
+  return ` Linked to system item <b>${esc(prod.item_code||"")}</b> — "${esc(prod.name)}"${u.length?`, also carried by ${u.slice(0,3).join(", ")}${u.length>3?" +more":""}`:""}.`;
+}
 async function addItem(){
   if(!currentUser||currentUser.role!=="supplier")return;
   if(!subActive(currentUser.id)){ toast("Your subscription isn't active — subscribe to list stock.",true); return; }
   const name=val("iName"); if(!name){ return toast("Item name is required.",true); }
   const cat=val("iCat"), unit=val("iUnit"), code=val("iCode");
   if(LIVE){
+    let prod;
+    try{ prod=await getOrCreateProduct(name,cat,unit); }catch(e){ return toast(e.message||"Could not resolve product",true); }
     const { error } = await sb.from("catalog_items").insert({ owner_id:currentUser.id, supplier_name:currentUser.company,
-      name, category:cat, unit, code, stock:val("iStock"), description:val("iDesc"), image_url:val("iImg") });
+      product_id:prod.id, name, category:cat, unit, code, stock:val("iStock"), description:val("iDesc"), image_url:val("iImg") });
     if(error){ return toast(error.message,true); }
     ["iName","iCat","iUnit","iCode","iStock","iDesc","iImg"].forEach(id=>document.getElementById(id).value="");
     await liveLoad(); refreshFilters(); renderCatalog(); renderSupItems();
-    return toast(`Added "${esc(name)}".${joinNotice(name,cat,unit,code)}`,false);
+    return toast(`Added "${esc(name)}".${masterNotice(prod)}`,false);
   }
   CATALOG=await sGet(K_CAT,true)||CATALOG;
   CATALOG.push({ id:uid(), createdAt:Date.now(), ownerId:currentUser.id, supplier:currentUser.company,
@@ -1294,34 +1323,79 @@ async function renderAdmin(){
   renderAdmAccounts(); renderAdmSubs(); renderAdmPlans(); renderAdmAds(); renderAdmProducts(); renderAdmReqs();
 }
 let MERGESEL=new Set();
-function admProdKey(it){ return it.productKey||canonKey(it); }
+function admProdKey(it){ return groupKeyOf(it); }
 function renderAdmProducts(){
   const groups=productGroups(ALLITEMS);
   const box=document.getElementById("admProducts");
   box.innerHTML=groups.map(p=>{
-    const key=admProdKey(p.rep);
+    const key=groupKeyOf(p.rep);
+    const codeTag=p.master?` <span class="tag">${esc(p.master.code)}</span>`:"";
+    const rename=p.master?` <button class="btn-xs" onclick="renameProduct('${p.master.id}')">Rename</button>`:"";
     const listings=p.group.map(it=>`<div class="ameta" style="display:flex;gap:8px;align-items:center;padding:3px 0">• ${esc(it.supplier||"—")}: ${esc(it.name)}${it.code?` <span class="tag">${esc(it.code)}</span>`:""}<button class="btn-xs" style="margin-left:auto" onclick="splitListing('${it.id}')">Split out</button></div>`).join("");
     return `<div class="arow" style="display:block">
-      <label class="mopt" style="padding:0 0 4px"><input type="checkbox" ${MERGESEL.has(key)?"checked":""} onchange="toggleMergeSel('${key.replace(/'/g,"\\'")}',this.checked)"><span class="aname">${esc(p.rep.name)}</span> <span class="tag ${p.suppliers.length>1?'active':''}">${p.suppliers.length} supplier${p.suppliers.length>1?'s':''}</span></label>
+      <label class="mopt" style="padding:0 0 4px"><input type="checkbox" ${MERGESEL.has(key)?"checked":""} onchange="toggleMergeSel('${key.replace(/'/g,"\\'")}',this.checked)"><span class="aname">${esc(p.rep.name)}</span>${codeTag} <span class="tag ${p.suppliers.length>1?'active':''}">${p.suppliers.length} supplier${p.suppliers.length>1?'s':''}</span>${rename}</label>
       <div style="padding-left:6px">${listings}</div></div>`;
   }).join("")||`<div class="section-empty">No items yet.</div>`;
   document.getElementById("mergeCount").innerHTML=MERGESEL.size?`<b>${MERGESEL.size}</b> selected`:"";
 }
 function toggleMergeSel(key,on){ if(on)MERGESEL.add(key); else MERGESEL.delete(key); document.getElementById("mergeCount").innerHTML=MERGESEL.size?`<b>${MERGESEL.size}</b> selected`:""; }
-async function setProductKey(ids,key){
-  if(LIVE){ const { error }=await sb.from("catalog_items").update({product_key:key}).in("id",ids); if(error)return toast(error.message,true); await liveLoadAdmin(); await liveLoad(); }
-  else { CATALOG=await sGet(K_CAT,true)||CATALOG; CATALOG.forEach(i=>{ if(ids.includes(i.id)) i.productKey=key; }); await sSet(K_CAT,CATALOG,true); ALLITEMS=CATALOG; }
+async function setProductKey(ids,key){   // demo grouping override
+  CATALOG=await sGet(K_CAT,true)||CATALOG; CATALOG.forEach(i=>{ if(ids.includes(i.id)) i.productKey=key; }); await sSet(K_CAT,CATALOG,true); ALLITEMS=CATALOG;
   renderAdmProducts(); refreshFilters(); renderCatalog();
 }
 async function mergeSelected(){
   if(MERGESEL.size<2) return toast("Tick at least two products to merge.",true);
   const keys=[...MERGESEL];
-  const ids=ALLITEMS.filter(i=>keys.includes(admProdKey(i))).map(i=>i.id);
+  const offers=ALLITEMS.filter(i=>keys.includes(groupKeyOf(i))), ids=offers.map(i=>i.id);
   MERGESEL.clear();
+  if(LIVE){
+    let target=offers.find(i=>i.productId)?.productId;
+    try{ if(!target){ const s=offers[0]; const prod=await getOrCreateProduct(s.name,s.category,s.unit); target=prod.id; } }
+    catch(e){ return toast(e.message,true); }
+    const { error }=await sb.from("catalog_items").update({product_id:target}).in("id",ids);
+    if(error) return toast(error.message,true);
+    await liveLoadAdmin(); await liveLoad(); renderAdmProducts(); refreshFilters(); renderCatalog();
+    return toast(`Merged ${ids.length} listings into one product.`,false);
+  }
   await setProductKey(ids,"grp_"+uid());
   toast(`Merged ${ids.length} listings into one product.`,false);
 }
-async function splitListing(id){ await setProductKey([id],"grp_"+uid()); toast("Listing split into its own product.",false); }
+async function splitListing(id){
+  if(LIVE){
+    const it=ALLITEMS.find(x=>x.id===id); if(!it)return;
+    const key=(it.productKey||canonKey(it))+"#"+String(id).slice(0,8);
+    let prod; try{ const { data,error }=await sb.rpc("get_or_create_product",{p_key:key,p_name:it.name,p_category:it.category,p_unit:it.unit}); if(error)throw error; prod=Array.isArray(data)?data[0]:data; }catch(e){ return toast(e.message,true); }
+    const { error }=await sb.from("catalog_items").update({product_id:prod.id}).eq("id",id);
+    if(error) return toast(error.message,true);
+    await liveLoadAdmin(); await liveLoad(); renderAdmProducts(); refreshFilters(); renderCatalog();
+    return toast("Listing split into its own product.",false);
+  }
+  await setProductKey([id],"grp_"+uid()); toast("Listing split into its own product.",false);
+}
+async function renameProduct(pid){
+  const p=PRODMAP[pid]; const v=prompt("System name shown to buyers:",p?p.name:""); if(v==null)return;
+  const { error }=await sb.from("products").update({name:(v.trim()||(p&&p.name)||"Unnamed item")}).eq("id",pid);
+  if(error) return toast(error.message,true);
+  await liveLoadAdmin(); await liveLoad(); renderAdmProducts(); renderCatalog(); toast("Product renamed.",false);
+}
+async function rebuildMaster(){
+  if(!LIVE) return toast("Rebuild runs against the live database only.",true);
+  const groups=new Map();
+  ALLITEMS.forEach(i=>{ const k=i.productKey||canonKey(i); if(!groups.has(k))groups.set(k,[]); groups.get(k).push(i); });
+  toast(`Rebuilding master catalog for ${groups.size} products…`,false);
+  try{
+    for(const [k,grp] of groups){
+      const rep=grp[0];
+      const { data,error }=await sb.rpc("get_or_create_product",{p_key:k,p_name:rep.name,p_category:rep.category,p_unit:rep.unit});
+      if(error) throw error;
+      const pid=(Array.isArray(data)?data[0]:data).id;
+      const { error:ue }=await sb.from("catalog_items").update({product_id:pid}).in("id",grp.map(x=>x.id));
+      if(ue) throw ue;
+    }
+  }catch(e){ return toast(e.message||"Rebuild failed",true); }
+  await liveLoadAdmin(); await liveLoad(); renderAdmProducts(); refreshFilters(); renderCatalog();
+  toast(`Master catalog rebuilt — ${groups.size} products.`,false);
+}
 function renderAdmAccounts(){
   const list=ACCOUNTS.filter(a=>!a.isAdmin).sort((a,b)=>(a.status==="review"?-1:0)-(b.status==="review"?-1:0));
   document.getElementById("admAccounts").innerHTML=list.map(a=>`<div class="arow">
@@ -1485,7 +1559,17 @@ async function addBulkItems(){
   if(!BULK.length){ previewBulk(); if(!BULK.length)return; }
   const btn=document.getElementById("bulkAddBtn"); btn.disabled=true;
   if(LIVE){
-    const rows=BULK.map(i=>({owner_id:currentUser.id,supplier_name:currentUser.company,name:i.name,category:i.category,unit:i.unit,code:i.code,stock:i.stock,description:i.desc||""}));
+    // resolve each distinct product key to a master product, then insert offers linked to it
+    const keyed=BULK.map(i=>({...i,_key:canonKey({name:i.name,category:i.category,unit:i.unit})}));
+    const keyToPid={};
+    try{
+      for(const k of [...new Set(keyed.map(x=>x._key))]){
+        const s=keyed.find(x=>x._key===k);
+        const prod=await getOrCreateProduct(s.name,s.category,s.unit);
+        keyToPid[k]=prod.id;
+      }
+    }catch(e){ btn.disabled=false; return toast(e.message||"Could not resolve products",true); }
+    const rows=keyed.map(i=>({owner_id:currentUser.id,supplier_name:currentUser.company,product_id:keyToPid[i._key],name:i.name,category:i.category,unit:i.unit,code:i.code,stock:i.stock,description:i.desc||""}));
     const { error }=await sb.from("catalog_items").insert(rows);
     if(error){ btn.disabled=false; return toast(error.message,true); }
     await liveLoad();

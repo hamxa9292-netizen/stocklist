@@ -539,7 +539,7 @@ async function sSet(key,val,shared){ if(!hasStore){mem[key+shared]=val;return;} 
    Fill these two in to run against your database. Leave blank to use the
    in-browser demo store. Get both from Supabase ▸ Project Settings ▸ API. */
 const SUPA_URL  = "https://gixzfrfpmhvrpplveojv.supabase.co";                         // e.g. https://xxxx.supabase.co
-const SUPA_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdpeHpmcmZwbWh2cnBwbHZlb2p2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUzMzQxNzMsImV4cCI6MjEwMDkxMDE3M30.DN1QlnsdVVtFmO-3Jw0HNkG-mB6b4O6pqVlK3goWrHw";                         // anon public key
+const SUPA_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdpeHpmcmZwbWh2cnBwbHZlb2p2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUzMzQxNzMsImV4cCI6MjEwMDkxMDE3M30.DN1QlnsdVVtFmO-3Jw0HNkG-mB6b4O6pqVlK3goWrHw";
 const LIVE = !!(SUPA_URL && SUPA_ANON && window.supabase);
 const sb = LIVE ? window.supabase.createClient(SUPA_URL, SUPA_ANON) : null;
 let myActiveSub = false;                       // current supplier's live sub state
@@ -959,8 +959,8 @@ function renderCatalog(){
   box.innerHTML=list.length?list.map(cardHTML).join(""):`<div class="section-empty" style="grid-column:1/-1"><div class="big">No matching items</div>Try a different search or clear the filters.</div>`;
 }
 function cardHTML(i){
-  const inD=DOCKET[i.id]!=null, glyph=(i.category||i.name||"?").trim().charAt(0).toUpperCase(), supN=suppliersFor(i).length;
-  const thumb=i.img?`<div class="thumb"><img src="${esc(i.img)}" alt="" onerror="this.parentNode.innerHTML='<div class=\\'glyph\\'>${esc(glyph)}</div>'"></div>`:`<div class="thumb"><div class="glyph">${esc(glyph)}</div></div>`;
+  const inD=DOCKET[i.id]!=null, supN=suppliersFor(i).length;
+  const thumb=i.img?`<div class="thumb"><img src="${esc(i.img)}" alt="" onerror="this.closest('.thumb').remove()"></div>`:"";
   const btn = isGuest
     ? `<button class="addbtn" onclick="guestBlock()">+ Add</button>`
     : `<button class="addbtn ${inD?"in":""}" onclick="toggleDocket('${i.id}')">${inD?"✓ Added":"+ Add"}</button>`;
@@ -1399,9 +1399,9 @@ function matchRequirement(reqName){
     const itoks=tokset((it.name||"")+" "+(it.category||""));
     let shared=0; rt.forEach(t=>{ if(itoks.has(t)) shared++; });
     const codeHit=it.code&&it.code.length>=3&&low.indexOf(it.code.toLowerCase())>=0;
-    if(!shared&&!codeHit) continue;
-    const coverage=shared/rt.length;
-    if(coverage>=0.5||codeHit) scored.push({item:it,score:(codeHit?1:0)+coverage,shared});
+    const need=Math.min(2, rt.length);          // 2 shared words, or all of them if the list has only 1
+    if(codeHit || shared>=need)
+      scored.push({item:it, score:(codeHit?3:0)+shared+shared/rt.length, shared});
   }
   scored.sort((a,b)=> b.score-a.score || b.shared-a.shared);
   return scored.slice(0,6);
@@ -1411,27 +1411,28 @@ function openReqMatch(){ document.getElementById("reqModal").classList.add("show
 function closeReqMatch(){ document.getElementById("reqModal").classList.remove("show"); }
 function runMatch(){
   const reqs=parseRequirements(document.getElementById("reqText").value);
-  MATCHES=reqs.map(r=>{ const m=matchRequirement(r.name); return {req:r,matches:m,picked:m.length?m[0].item.id:null}; });
+  MATCHES=reqs.map(r=>{ const m=matchRequirement(r.name); return {req:r,matches:m,picked:new Set(m.length?[m[0].item.id]:[])}; });
   renderMatchResults();
 }
-function pickMatch(idx,id){ MATCHES[idx].picked=id||null; document.getElementById("addMatchedBtn").disabled=!MATCHES.some(x=>x.picked); }
+function anyPicked(){ return MATCHES.some(x=>x.picked&&x.picked.size); }
+function togglePick(idx,id,on){ const s=MATCHES[idx].picked; if(on)s.add(id); else s.delete(id); document.getElementById("addMatchedBtn").disabled=!anyPicked(); }
 function renderMatchResults(){
   const box=document.getElementById("matchResults"), sum=document.getElementById("matchSummary");
   if(!MATCHES.length){ box.innerHTML=`<div class="bmsg">Nothing to match yet — paste your list and press Match.</div>`; sum.textContent=""; document.getElementById("addMatchedBtn").disabled=true; return; }
   const matched=MATCHES.filter(x=>x.matches.length).length;
-  sum.innerHTML=`<b>${matched}</b> of ${MATCHES.length} matched`;
+  sum.innerHTML=`<b>${matched}</b> of ${MATCHES.length} matched · tick every supplier you want to quote`;
   box.innerHTML=MATCHES.map((x,idx)=>{
     if(!x.matches.length)
       return `<div class="mrow nomatch"><div class="mreq"><span class="rqname">${esc(x.req.name)}</span><span class="rqqty">×${x.req.qty}</span></div><div class="mnone">No match in the catalog yet</div></div>`;
-    const opts=x.matches.map(m=>`<label class="mopt"><input type="radio" name="m${idx}" ${x.picked===m.item.id?"checked":""} onchange="pickMatch(${idx},'${m.item.id}')"><span class="mname">${esc(m.item.name)}</span><span class="msup">${esc(m.item.supplier||"—")}</span></label>`).join("");
+    const opts=x.matches.map(m=>`<label class="mopt"><input type="checkbox" ${x.picked.has(m.item.id)?"checked":""} onchange="togglePick(${idx},'${m.item.id}',this.checked)"><span class="mname">${esc(m.item.name)}</span><span class="msup">${esc(m.item.supplier||"—")}</span></label>`).join("");
     return `<div class="mrow"><div class="mreq"><span class="rqname">${esc(x.req.name)}</span><span class="rqqty">×${x.req.qty}</span><span class="mcount">${x.matches.length} match${x.matches.length>1?"es":""}</span></div>
-      <div class="mopts">${opts}<label class="mopt skip"><input type="radio" name="m${idx}" ${x.picked===null?"checked":""} onchange="pickMatch(${idx},'')"><span class="mname muted">Skip this item</span></label></div></div>`;
+      <div class="mopts">${opts}</div></div>`;
   }).join("");
-  document.getElementById("addMatchedBtn").disabled=!MATCHES.some(x=>x.picked);
+  document.getElementById("addMatchedBtn").disabled=!anyPicked();
 }
 function addMatchedToDocket(){
   let added=0;
-  MATCHES.forEach(x=>{ if(x.picked&&CATALOG.some(i=>i.id===x.picked)){ DOCKET[x.picked]=Math.max(1,x.req.qty||1); added++; } });
+  MATCHES.forEach(x=>{ if(x.picked) x.picked.forEach(id=>{ if(CATALOG.some(i=>i.id===id)){ DOCKET[id]=Math.max(1,x.req.qty||1); added++; } }); });
   closeReqMatch(); renderCatalog(); renderDocketPanel();
   if(added){ openDocket(); toast(`Added ${added} matched item${added>1?"s":""} to your request.`,false); }
   else toast("Nothing selected to add.",true);
